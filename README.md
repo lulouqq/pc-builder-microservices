@@ -6,13 +6,25 @@ CSCI318 Software Engineering Practices & Principles – group project.
 
 | Service | Port | Status | Responsibilities |
 |---|---|---|---|
-| `account-service` | 8081 | placeholder | users, profiles, addresses, preferences |
-| `catalog-service` | 8082 | skeleton | products, categories, specifications, prices, product reviews |
-| `inventory-service` | 8083 | placeholder | stock, inventory items, stock reservations |
-| `order-service` | 8084 | placeholder | cart, checkout, orders, order items, order/payment status |
+| `catalog-service` | 8081 | skeleton | products, categories, specifications, prices, product reviews |
+| `inventory-service` | 8082 | placeholder | stock, inventory items, stock reservations |
+| `order-service` | 8083 | placeholder | cart, checkout, orders, order items, order/payment status |
+| `account-service` | 8084 | placeholder | users, profiles, addresses, preferences |
 | `recommendation-service` | 8085 | placeholder | AI-generated PC builds, compatibility checking, previous build requests |
 
-Each service uses the base path `/api/v1`.
+Each service uses the base path `/api` (see [specs/api-endpoints.md](specs/api-endpoints.md)).
+
+## Specifications
+
+The project specifications live in [`specs/`](specs/) (Markdown versions of the documents in `source-docs/`):
+
+- [Requirements](specs/requirements.md) – functional (FR-01 … FR-21) and non-functional (NFR-01 … NFR-09) requirements
+- [Domain Model](specs/domain-model.md) – domain classes, fields and diagrams per service
+- [User Stories](specs/user-stories.md) – user stories (C1–C5, I1–I3, O1–O6, A1–A3, R1–R4), domain class/event mapping and endpoint mapping
+- [API Endpoints](specs/api-endpoints.md) – REST endpoints, port mapping, contract rules and error contract
+- [Event Sourcing](specs/event-sourcing.md) – event-sourced `InventoryItem` in inventory-service
+- [CQRS](specs/cqrs.md) – command/query split in inventory-service
+- [Architecture](specs/architecture.md) – service, REST and Kafka architecture diagram
 
 ## Layered Architecture
 
@@ -45,4 +57,9 @@ On Windows PowerShell:
 .\mvnw.cmd spring-boot:run -pl catalog-service
 ```
 
-H2 console (catalog-service): http://localhost:8082/api/v1/h2-console (JDBC URL `jdbc:h2:mem:catalogdb`, user `sa`, no password).
+H2 console (catalog-service): http://localhost:8081/api/h2-console (JDBC URL `jdbc:h2:mem:catalogdb`, user `sa`, no password).
+
+## Prompt History
+
+- Project-wide AI prompts (setup, architecture, specifications): [`PROMPT_HISTORY.md`](PROMPT_HISTORY.md)
+- Service-specific AI prompts: `<service>/PROMPT_HISTORY.md` in each microservice directory
