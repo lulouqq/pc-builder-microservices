@@ -41,3 +41,39 @@ There are exactly 5 microservices — do not add or merge services:
 - Record every substantial AI-assisted change (date, goal, exact prompt, short summary, files changed):
   - project-wide work (setup, architecture, specs, cross-service changes) → root `PROMPT_HISTORY.md`
   - service-specific work → that service's `<service>/PROMPT_HISTORY.md`
+
+## Prompt history rules
+
+- After every substantial user prompt that leads to analysis, code changes, spec changes, refactoring, testing, or architectural decisions, record it in prompt history.
+- Use the root `PROMPT_HISTORY.md` for:
+  - project setup
+  - repository-wide changes
+  - architecture
+  - shared specs
+  - cross-service decisions
+- Use the service-specific `PROMPT_HISTORY.md` for work that only affects one microservice.
+- Record:
+  - date
+  - goal
+  - exact user prompt
+  - short summary of what changed
+  - files created or modified
+- Do not skip prompt history because the change seems small if it affects implementation or specifications.
+- If a prompt affects multiple services, use the root prompt history.
+
+## Before making changes
+
+- Read the relevant files under `specs/` before implementing.
+- Check existing code before creating new classes, endpoints, events or configuration.
+- Prefer the smallest change that satisfies the current task.
+- Do not implement future stories unless explicitly requested.
+
+## After making changes
+
+- Run the relevant tests.
+- Report:
+  - files changed
+  - tests run
+  - assumptions made
+  - unresolved issues
+- Do not silently modify specs to match code or code to match specs when they conflict.
