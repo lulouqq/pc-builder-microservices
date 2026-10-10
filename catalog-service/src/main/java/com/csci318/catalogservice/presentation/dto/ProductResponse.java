@@ -1,6 +1,7 @@
 package com.csci318.catalogservice.presentation.dto;
 
 import com.csci318.catalogservice.domain.Product;
+import com.csci318.catalogservice.service.ProductDetails;
 
 import java.util.List;
 
@@ -11,9 +12,17 @@ public record ProductResponse(String id, String name, Float price, String brand,
                               List<SpecificationDto> specifications, String stockStatus) {
 
     public static ProductResponse from(Product product) {
+        return from(product, null);
+    }
+
+    public static ProductResponse from(ProductDetails details) {
+        return from(details.product(), details.stockStatus().name());
+    }
+
+    private static ProductResponse from(Product product, String stockStatus) {
         return new ProductResponse(product.getId(), product.getName(), product.getPrice(), product.getBrand(),
                 product.getCategoryId(),
                 product.getSpecifications().stream().map(SpecificationDto::from).toList(),
-                null);
+                stockStatus);
     }
 }

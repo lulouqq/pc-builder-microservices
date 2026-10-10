@@ -19,12 +19,14 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
+    private final InventoryClient inventoryClient;
     private final ApplicationEventPublisher eventPublisher;
 
     public ProductService(ProductRepository productRepository, CategoryRepository categoryRepository,
-                          ApplicationEventPublisher eventPublisher) {
+                          InventoryClient inventoryClient, ApplicationEventPublisher eventPublisher) {
         this.productRepository = productRepository;
         this.categoryRepository = categoryRepository;
+        this.inventoryClient = inventoryClient;
         this.eventPublisher = eventPublisher;
     }
 
@@ -34,6 +36,12 @@ public class ProductService {
             throw new ValidationFailedException("specName and specValue must be used together");
         }
         return productRepository.search(categoryId, brand, specName, specValue);
+    }
+
+    @Transactional(readOnly = true)
+    public ProductDetails getProductDetails(String productId) {
+        Product product = findProduct(productId);
+        return new ProductDetails(product, inventoryClient.getStockStatus(productId));
     }
 
     public Product createProduct(String name, Float price, String brand, String categoryId,

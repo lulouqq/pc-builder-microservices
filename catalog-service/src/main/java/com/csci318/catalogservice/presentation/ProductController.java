@@ -42,6 +42,11 @@ public class ProductController {
                 .toList();
     }
 
+    @GetMapping("/{productId}")
+    public ProductResponse getProduct(@PathVariable String productId) {
+        return ProductResponse.from(productService.getProductDetails(productId));
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ProductResponse createProduct(@Valid @RequestBody ProductCreateRequest request) {

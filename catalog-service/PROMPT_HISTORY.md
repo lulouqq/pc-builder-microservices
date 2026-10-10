@@ -112,3 +112,66 @@ Leave admin authorisation for after account microservice is implemented. Commit 
 - `catalog-service/src/test/java/com/csci318/catalogservice/ProductReviewTests.java`
 - `catalog-service/README.md`, `catalog-service/PROMPT_HISTORY.md`
 - `specs/domain-model.md`, `specs/api-endpoints.md`, `specs/architecture.md`, `README.md`, `PROMPT_HISTORY.md` (project-wide files; see root Prompt 15)
+
+---
+
+## Prompt 4
+
+**Date:** 2026-10-10
+
+**Goal:** Commit C4, then progress C2 and C3 as far as possible without inventing API contracts, Kafka event schemas or business rules.
+
+**Exact user prompt:**
+
+````text
+Commit C4 first, preserving the existing implementation.
+
+For C2 and C3, do not block all progress just because their external dependencies are not ready. However, do not invent API contracts, Kafka event schemas, or business rules.
+
+For C2:
+Inspect the existing requirements and determine what Catalog needs from Inventory.
+
+Identify the proposed GET /inventory/{productId} response contract.
+
+Treat quantity and reservedQuantity as provisional until confirmed against the Inventory implementation or agreed contract.
+
+Implement Catalog against an interface/client that can be mocked in tests.
+
+Handle unavailable Inventory data distinctly from confirmed zero stock.
+
+Document any remaining integration assumptions.
+
+For C3:
+Identify the missing decisions required to define trending products.
+
+Propose a clear event schema and trending calculation for team approval.
+
+Implement independently testable calculation logic using sample events where possible.
+
+Do not add Kafka infrastructure or invent producer behaviour until the existing project configuration and team requirements have been checked.
+
+Before modifying files, report the decisions that require team confirmation and the implementation steps that can proceed independently. Keep the changes focused on Catalog and do not modify other services without approval.
+````
+
+**Summary of changes:**
+
+- Committed C4 as `c1c779c` ("feat(catalog): implement C4 product reviews"); not pushed. The work below is not committed.
+- Checked before changing files: inventory-service has no code, and no Kafka dependency or configuration exists in the project. Reported the decisions needing team confirmation and the independent steps before modifying files.
+- C2: `GET /products/{productId}` returns the product with `stockStatus`. New `StockStatus` enum (`IN_STOCK`, `OUT_OF_STOCK`, `UNKNOWN`), `InventoryClient` interface (service layer) and `RestInventoryClient` (infrastructure), which holds the provisional `InventoryResponse` contract (`quantity`, `reservedQuantity`). Unavailable or unusable Inventory data gives `UNKNOWN`; confirmed zero available stock gives `OUT_OF_STOCK`. New settings `inventory-service.base-url` and `inventory-service.timeout`.
+- C3: `TrendingProductsCalculator` (domain service) and a provisional `ProductViewed` record; the window and list size are parameters. No Kafka, no producer, no consumer and no `GET /products/trending` endpoint.
+- `ProductViewed` is not published from `GET /products/{productId}` yet, although `specs/api-endpoints.md` says C2 publishes it; this waits for the Kafka decisions.
+- `catalog-service/README.md`: status table, C2 integration assumptions, and the C3 decisions, proposed event schema and proposed calculation for team approval.
+- No specs, other services or root files were changed.
+- Tests: new `ProductDetailsTests` (6, `InventoryClient` mocked), `RestInventoryClientTests` (8, local stub HTTP server) and `TrendingProductsCalculatorTests` (7, sample events). `./mvnw clean test` passes (46 tests).
+
+**Files created/modified:**
+
+- `catalog-service/src/main/java/com/csci318/catalogservice/domain/{StockStatus,TrendingProductsCalculator}.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/domain/event/ProductViewed.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/service/{InventoryClient,ProductDetails,ProductService}.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/infrastructure/RestInventoryClient.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/presentation/ProductController.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/presentation/dto/ProductResponse.java`
+- `catalog-service/src/main/resources/application.yml`
+- `catalog-service/src/test/java/com/csci318/catalogservice/{ProductDetailsTests,RestInventoryClientTests,TrendingProductsCalculatorTests}.java`
+- `catalog-service/README.md`, `catalog-service/PROMPT_HISTORY.md`
