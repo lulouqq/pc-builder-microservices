@@ -6,7 +6,7 @@
 
 *Overview diagram: class diagram of all five service domains (Account, Order, Inventory, Catalog, Recommendation) with the fields listed below and the associations between them — e.g. User 1 — 0..1 UserProfile / 0..1 Preference / 0..\* Address, User 1 — 0..\* Order, Order 1 — 1..\* OrderItem, OrderItem 0..\* — 1 Product, Order 1 — 0..\* StockReservation, InventoryItem 1 — 0..\* StockReservation, InventoryItem 1 — 1 Product, Product 0..\* — 1 Category, Product 1 — 1..\* Specification, User 1 — 0..\* BuildRequest, BuildRequest 1 — 1 PCBuild, PCBuild 1 — 1..\* BuildComponent, BuildComponent 0..\* — 1 Product, PCBuild 1 — 0..1 Recommendation. The diagram's "User Service Domain" label refers to the Account Service.*
 
-> The diagrams show User 1 — 1 Address; the relationship used in the specs is User 1 — 0..\* Address (a user can have several saved delivery addresses, A1). The diagrams also predate these additions, which are defined only in the tables below: `Review` (1.4), `StockNotificationSubscription` (2.3), `Order.deliveryAddressId` and `Order.paymentStatus` (3.1), `User.id` and `User.passwordHash` (4.1), `Address.id` (4.4) and `BuildComponent.id` (5.3).
+> The diagrams show User 1 — 1 Address; the relationship used in the specs is User 1 — 0..\* Address (a user can have several saved delivery addresses, A1). The diagrams also predate these additions, which are defined only in the tables below: `Review` (1.4), `StockNotificationSubscription` (2.3), `Order.deliveryAddressId` and `Order.paymentStatus` (3.1), `User.id` and `User.passwordHash` (4.1), `Address.id` (4.4), `BuildComponent.id` (5.3), and `Product.categoryId` and `Product.specifications` (1.1), which record the Product — Category and Product — Specification associations as fields.
 
 ## Domain Classes and Link to Requirements
 
@@ -48,6 +48,8 @@
 | name | String | Product Name | Required |
 | price | Float | Price of the item | Required |
 | brand | String | Brand the item belongs to | Required |
+| categoryId | String | Identifier of the Category the product belongs to (Product 0..\* — 1 Category) | Required |
+| specifications | List\<Specification\> | Technical specifications of the product (Product 1 — 1..\* Specification) | Required (at least one) |
 
 ### 1.2 Category
 
@@ -73,6 +75,18 @@
 | rating | Integer | Rating given to the product | Required |
 | comment | String | Review text | Optional |
 | createdAt | DateTime | Date and Time the review was submitted | Required |
+
+### 1.5 Catalog Domain Events
+
+| Event | Triggered By | Key Payload Fields | Published to Kafka |
+|---|---|---|---|
+| ProductCreated | `POST /products` (C5) | productId, name, price, brand, categoryId | No |
+| ProductUpdated | `PUT /products/{productId}` (C5) | productId, name, price, brand, categoryId | No |
+| ProductRemoved | `DELETE /products/{productId}` (C5) | productId | No |
+| ProductReviewed | `POST /products/{productId}/reviews` (C4) | reviewId, productId, userId, rating | No |
+| ProductViewed | `GET /products/{productId}` (C2) | productId | Yes |
+
+Every event also carries `occurredAt` (DateTime). `ProductCreated`, `ProductUpdated`, `ProductRemoved` and `ProductReviewed` are domain events internal to Catalog Service. `ProductViewed` is the only Catalog event published to Kafka; Catalog Service consumes it to maintain the trending list (C3) — see [Architecture Decisions](architecture.md#architecture-decisions).
 
 ![Catalog service domain model](images/domain-model-catalog.png)
 

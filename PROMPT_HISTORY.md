@@ -720,3 +720,60 @@ Now check all the changes and inconsistences we fixed for this session, and in p
 **Files created/modified:**
 
 - `PROMPT_HISTORY.md` (this entry only)
+
+---
+
+## Prompt 12
+
+**Date:** 2026-10-10
+
+**Goal:** Resolve the catalog-service spec gaps found while reading the specs on the `catalog-microservice` branch, so that catalog-service can be implemented.
+
+**Exact user prompt:**
+
+````text
+Resolve all the spec gaps. Provide a summary of what was changed and where. Also inform me if the catalog service is ready to be implemented after resolving the spec gaps.
+````
+
+**Summary of changes:**
+
+- Product ↔ Category / Specification: added `Product.categoryId` (Required) and `Product.specifications` (at least one) to the domain model, recording the associations already shown in the diagram.
+- Catalog DTOs: defined the fields of `ProductCreateRequest`, `ProductUpdateRequest`, `ProductResponse`, `CategoryCreateRequest`, `CategoryUpdateRequest`, `CategoryResponse`, `ReviewCreateRequest` and `ReviewResponse` in the API spec, plus the `GET /products` query parameters (`categoryId`, `brand`, `specName` + `specValue`). `ProductResponse.stockStatus` (`IN_STOCK` / `OUT_OF_STOCK` / `UNKNOWN`) is set only for C2.
+- Listing categories: added `GET /categories` (C1) to the API spec and the user story endpoint mapping (Architecture Decision 10).
+- Catalog events: added section 1.5 Catalog Domain Events with payload fields. Only `ProductViewed` is published to Kafka and Catalog Service consumes it for the trending list; `ProductCreated`, `ProductUpdated`, `ProductRemoved` and `ProductReviewed` are internal domain events (Architecture Decision 9).
+- Package name: `CLAUDE.md` now states that the package is `com.csci318.<service>` without the hyphen, matching the existing `com.csci318.catalogservice`.
+- No code changed. Recorded here rather than in `catalog-service/PROMPT_HISTORY.md` because the changes are to the shared specs and `CLAUDE.md`.
+
+**Files created/modified:**
+
+- `specs/domain-model.md`
+- `specs/api-endpoints.md`
+- `specs/architecture.md`
+- `specs/user-stories.md`
+- `CLAUDE.md`
+- `PROMPT_HISTORY.md`
+
+
+---
+
+## Prompt 13
+
+**Date:** 2026-10-10
+
+**Goal:** Commit the catalog spec gap fixes from Prompt 12 and check that catalog-service is ready for C5 implementation.
+
+**Exact user prompt:**
+
+````text
+Make a commit before implementing C5. Inform me of the changes and where. Perform a check to ensure catalog service is ready to be implemented after the implementations from this prompt.
+````
+
+**Summary of changes:**
+
+- Committed the Prompt 12 spec changes on the `catalog-microservice` branch (not pushed).
+- Readiness check: `./mvnw clean test` passes; the new spec links and anchors resolve; ports, `/api` base path and package name match the specs. No spec or code changes were made by the check.
+- Noted for C5: `spring-boot-starter-validation` is not yet a dependency of `catalog-service` (needed for `ValidationFailed` 400); behaviour when removing a category that still has products is undefined; no admin authorisation mechanism is specified.
+
+**Files created/modified:**
+
+- `PROMPT_HISTORY.md` (this entry only)

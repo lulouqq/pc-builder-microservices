@@ -19,6 +19,7 @@ Endpoint paths below are relative to the service base URL.
 | Feature | Method | Endpoint Path | Request Body | Response (Success) | Description |
 |---|---|---|---|---|---|
 | C1 | GET | /products | None | 200 OK (Array\<ProductResponse\>) | Browse and search products. Query parameters may be used for category, brand, and specification filters |
+| C1 | GET | /categories | None | 200 OK (Array\<CategoryResponse\>) | List product categories, used to browse products by category |
 | C2 | GET | /products/{productId} | None | 200 OK (ProductResponse) | View detailed information for a specific product |
 | C3 | GET | /products/trending | None | 200 OK (Array\<ProductResponse\>) | View products currently trending based on recent customer activity |
 | C4 | GET | /products/{productId}/reviews | None | 200 OK (Array\<ReviewResponse\>) | View reviews and ratings for a product |
@@ -29,6 +30,35 @@ Endpoint paths below are relative to the service base URL.
 | C5 | POST | /categories | CategoryCreateRequest | 201 Created (CategoryResponse) | Create a new product category |
 | C5 | PUT | /categories/{categoryId} | CategoryUpdateRequest | 200 OK (CategoryResponse) | Update a product category |
 | C5 | DELETE | /categories/{categoryId} | None | 204 No Content | Remove a product category |
+
+#### Catalog Service Query Parameters
+
+All `GET /products` (C1) query parameters are optional and are combined with AND.
+
+| Parameter | Description |
+|---|---|
+| categoryId | Return only products in this category |
+| brand | Return only products of this brand |
+| specName, specValue | Return only products that have a specification with this name and value; used together |
+
+#### Catalog Service DTOs
+
+Field names and types follow the [Catalog Service Domain Model](domain-model.md#1-catalog-service-domain-model).
+
+| DTO | Fields |
+|---|---|
+| ProductCreateRequest | name, price, brand, categoryId, specifications (Array of {name, value}) |
+| ProductUpdateRequest | name, price, brand, categoryId, specifications (Array of {name, value}) |
+| ProductResponse | id, name, price, brand, categoryId, specifications (Array of {name, value}), stockStatus |
+| CategoryCreateRequest | name |
+| CategoryUpdateRequest | name |
+| CategoryResponse | id, name |
+| ReviewCreateRequest | userId, rating, comment (optional) |
+| ReviewResponse | id, productId, userId, rating, comment, createdAt |
+
+> `ProductResponse.stockStatus` (`IN_STOCK` / `OUT_OF_STOCK` / `UNKNOWN`) is set only by `GET /products/{productId}` (C2), from Inventory Service `GET /inventory/{productId}`: `IN_STOCK` when `quantity − reservedQuantity` is greater than 0, otherwise `OUT_OF_STOCK`, and `UNKNOWN` when Inventory Service is unavailable or has no record for the product (NFR-03). It is `null` in list responses (C1, C3) and in C5 responses.
+>
+> `GET /products/{productId}` also publishes `ProductViewed` to Kafka for the trending list (C3); it does not change the product itself.
 
 ### Inventory Service (http://localhost:8082/api)
 
