@@ -777,3 +777,30 @@ Make a commit before implementing C5. Inform me of the changes and where. Perfor
 **Files created/modified:**
 
 - `PROMPT_HISTORY.md` (this entry only)
+
+---
+
+## Prompt 14
+
+**Date:** 2026-10-10
+
+**Goal:** Project-wide parts of the catalog-service work recorded as Prompt 2 in `catalog-service/PROMPT_HISTORY.md` (fix the issues left after C5, implement C1).
+
+**Exact user prompt:**
+
+````text
+Fix the unresolved issues and Implement C1.
+````
+
+**Summary of changes:**
+
+- `specs/api-endpoints.md`: added `CategoryInUse` (409 Conflict, Catalog) to the error response contract.
+- `specs/architecture.md`: added Architecture Decision 11 (admin authorisation) with status Open; the user chose to leave it undecided for now.
+- `README.md`: catalog-service status changed from "skeleton" to "C1, C5 implemented".
+
+**Files created/modified:**
+
+- `specs/api-endpoints.md`
+- `specs/architecture.md`
+- `README.md`
+- `PROMPT_HISTORY.md`

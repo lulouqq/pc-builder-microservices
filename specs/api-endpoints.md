@@ -140,5 +140,6 @@ Field names and types follow the [Catalog Service Domain Model](domain-model.md#
 | ReservationConflict | 409 Conflict | Inventory | Stock reservation is invalid, expired, or cannot be modified |
 | OrderStateViolation | 409 Conflict | Order | Requested operation is not valid for the current order state |
 | CompatibilityConflict | 409 Conflict | Recommendation | Selected components contain compatibility conflicts |
+| CategoryInUse | 409 Conflict | Catalog | Category still has products and cannot be removed |
 | InternalServiceError | 500 Internal Server Error | All services | Unexpected service-side failure |
 | ServiceUnavailable | 503 Service Unavailable | Inter-service operations | Required downstream service is temporarily unavailable |
