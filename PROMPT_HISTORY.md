@@ -804,3 +804,32 @@ Fix the unresolved issues and Implement C1.
 - `specs/architecture.md`
 - `README.md`
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 15
+
+**Date:** 2026-10-10
+
+**Goal:** Project-wide parts of the catalog-service work recorded as Prompt 3 in `catalog-service/PROMPT_HISTORY.md` (commit C5 and C1, implement C4).
+
+**Exact user prompt:**
+
+````text
+Leave admin authorisation for after account microservice is implemented. Commit C5 and C! work. For C4, the rating range should be 1-5 stars. Implement C4.
+````
+
+**Summary of changes:**
+
+- `specs/domain-model.md`: `Review.rating` constraint is now "Required, 1–5" (stars).
+- `specs/api-endpoints.md`: `ReviewCreateRequest.rating` noted as 1–5.
+- `specs/architecture.md`: Architecture Decision 11 (admin authorisation) stays Open and is marked as deferred until Account Service is implemented.
+- `README.md`: catalog-service status changed to "C1, C4, C5 implemented".
+
+**Files created/modified:**
+
+- `specs/domain-model.md`
+- `specs/api-endpoints.md`
+- `specs/architecture.md`
+- `README.md`
+- `PROMPT_HISTORY.md`

@@ -53,7 +53,7 @@ Field names and types follow the [Catalog Service Domain Model](domain-model.md#
 | CategoryCreateRequest | name |
 | CategoryUpdateRequest | name |
 | CategoryResponse | id, name |
-| ReviewCreateRequest | userId, rating, comment (optional) |
+| ReviewCreateRequest | userId, rating (1–5), comment (optional) |
 | ReviewResponse | id, productId, userId, rating, comment, createdAt |
 
 > `ProductResponse.stockStatus` (`IN_STOCK` / `OUT_OF_STOCK` / `UNKNOWN`) is set only by `GET /products/{productId}` (C2), from Inventory Service `GET /inventory/{productId}`: `IN_STOCK` when `quantity − reservedQuantity` is greater than 0, otherwise `OUT_OF_STOCK`, and `UNKNOWN` when Inventory Service is unavailable or has no record for the product (NFR-03). It is `null` in list responses (C1, C3) and in C5 responses.

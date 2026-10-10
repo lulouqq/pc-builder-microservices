@@ -75,3 +75,40 @@ Fix the unresolved issues and Implement C1.
 - `catalog-service/src/test/java/com/csci318/catalogservice/{ProductBrowsingTests,CatalogManagementTests}.java`
 - `catalog-service/README.md`, `catalog-service/PROMPT_HISTORY.md`
 - `specs/api-endpoints.md`, `specs/architecture.md`, `README.md`, `PROMPT_HISTORY.md` (project-wide files; see root Prompt 14)
+
+---
+
+## Prompt 3
+
+**Date:** 2026-10-10
+
+**Goal:** Commit the C5 and C1 work, then implement user story C4 (submit and view product reviews) with a 1–5 star rating.
+
+**Exact user prompt:**
+
+````text
+Leave admin authorisation for after account microservice is implemented. Commit C5 and C! work. For C4, the rating range should be 1-5 stars. Implement C4.
+````
+
+**Summary of changes:**
+
+- Committed the C5 and C1 work as `126cb2c` ("feat(catalog): implement C5 and C1"); not pushed. The C4 work below is not committed.
+- Domain: `Review` aggregate root (id, productId, userId, rating 1–5, optional comment, createdAt) and the internal domain event `ProductReviewed`.
+- Infrastructure: `ReviewRepository`.
+- Service: `ReviewService` submits and lists reviews, publishes `ProductReviewed` in-process, and removes a product's reviews when `ProductRemoved` is published.
+- Presentation: `GET` and `POST /products/{productId}/reviews` in `ReviewController`, with `ReviewCreateRequest` and `ReviewResponse`.
+- Specs: `Review.rating` is now "Required, 1–5" in `specs/domain-model.md` and `specs/api-endpoints.md`; Architecture Decision 11 (admin authorisation) is marked as deferred until Account Service is implemented.
+- Tests: new `ProductReviewTests` (8 tests). `./mvnw clean test` passes (25 tests).
+- Assumptions (not defined in the specs): reviews are listed newest first; an unknown product returns `ResourceNotFound` (404) for both endpoints; `userId` is not checked against Account Service (the architecture has no Catalog → Account call); a user may review the same product more than once; comments are limited to 2000 characters; a removed product's reviews are removed with it.
+
+**Files created/modified:**
+
+- `catalog-service/src/main/java/com/csci318/catalogservice/domain/Review.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/domain/event/ProductReviewed.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/infrastructure/ReviewRepository.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/service/ReviewService.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/presentation/ReviewController.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/presentation/dto/{ReviewCreateRequest,ReviewResponse}.java`
+- `catalog-service/src/test/java/com/csci318/catalogservice/ProductReviewTests.java`
+- `catalog-service/README.md`, `catalog-service/PROMPT_HISTORY.md`
+- `specs/domain-model.md`, `specs/api-endpoints.md`, `specs/architecture.md`, `README.md`, `PROMPT_HISTORY.md` (project-wide files; see root Prompt 15)

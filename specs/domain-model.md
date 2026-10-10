@@ -72,7 +72,7 @@
 | id | String | Unique identifier of each review | Primary Identifier |
 | productId | String | Identifier of the reviewed product | Required |
 | userId | String | Identifier of the user who submitted the review | Required |
-| rating | Integer | Rating given to the product | Required |
+| rating | Integer | Rating given to the product, in stars | Required, 1–5 |
 | comment | String | Review text | Optional |
 | createdAt | DateTime | Date and Time the review was submitted | Required |
 
