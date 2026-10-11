@@ -1,0 +1,17 @@
+package com.csci318.catalogservice.presentation.dto;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+
+import java.util.List;
+
+public record ProductCreateRequest(
+        @NotBlank String name,
+        @NotNull @PositiveOrZero Float price,
+        @NotBlank String brand,
+        @NotBlank String categoryId,
+        @NotEmpty List<@NotNull @Valid SpecificationDto> specifications) {
+}

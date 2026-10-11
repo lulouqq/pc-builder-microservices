@@ -50,7 +50,7 @@ The architecture diagram does not show the Order Service → Recommendation Serv
 | Order fulfilment | OrderCancelled | Order Service → Apache Kafka Event Bus → Inventory Service |
 | Order fulfilment | OrderCompleted | Order Service → Apache Kafka Event Bus → Inventory Service |
 | Stock monitoring | StockChanged | Inventory Service → Apache Kafka Event Bus |
-| Trending | ProductViewed | Catalog Service → Apache Kafka Event Bus |
+| Trending | ProductViewed | Catalog Service → Apache Kafka Event Bus → Catalog Service (trending list, decision 9) |
 
 The architecture diagram labels the checkout event `OrderCreated`; the event name used in the specs is `OrderPlaced` (see decision 3). `StockReservationFailed`, `OrderCancelled` and `OrderCompleted` are not shown in the diagram (see decisions 4 and 6).
 
@@ -68,3 +68,6 @@ The architecture diagram labels the checkout event `OrderCreated`; the event nam
 | 6 | Stock reservation confirmation | Resolved | When payment is recorded as PAID (order → COMPLETED), Order Service publishes `OrderCompleted`. Inventory Service consumes it and issues `ConfirmStockReservationCommand`, which records `StockReservationConfirmed`: the reservation becomes `CONFIRMED` and the reserved quantity is deducted from stock. |
 | 7 | Order from a recommended build (R3) | Resolved | The endpoint is `POST /orders/from-recommendation/{recommendationId}`. Order Service calls Recommendation Service over REST (`GET /recommendations/{recommendationId}`) to get the build components, then creates a DRAFT order with them. |
 | 8 | Product stock status (C2) | Resolved | Catalog Service calls Inventory Service over REST (`GET /inventory/{productId}`) to show current stock status in product details (FR-02). |
+| 9 | Catalog events | Resolved | `ProductViewed` is the only Catalog event published to Kafka: it is published when product details are viewed (C2) and consumed by Catalog Service itself to maintain the trending list (C3, FR-03). `ProductCreated`, `ProductUpdated`, `ProductRemoved` and `ProductReviewed` are domain events internal to Catalog Service and are not published to Kafka. Payloads are listed in [Catalog Domain Events](domain-model.md#15-catalog-domain-events). |
+| 10 | Product category and listing categories | Resolved | `Product` holds a required `categoryId` (Product 0..\* — 1 Category). `GET /categories` is added under C1 so that customers can browse products by category. |
+| 11 | Admin authorisation | Open | C5, I3 and NFR-04 require administrative endpoints to be restricted to authorised administrators, but no mechanism is defined yet (no role on `User`, no token format for `AuthenticationResponse`). Deferred until Account Service is implemented; to be decided project-wide together with Account Service authentication (A2). Until then the Catalog Service C5 endpoints are not protected. |

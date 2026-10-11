@@ -30,6 +30,8 @@
 | R3: Add Recommended Build to Cart | PCBuild, BuildComponent, Order, OrderItem | None |
 | R4: View Previous Recommendations | BuildRequest, PCBuild, Recommendation | None |
 
+> Catalog events ([Architecture Decision 9](architecture.md#architecture-decisions)): only `ProductViewed` is published to Kafka; `ProductReviewed`, `ProductCreated`, `ProductUpdated` and `ProductRemoved` are domain events internal to Catalog Service.
+
 ## Catalog Service
 
 ### C1: Browse and Search Products
@@ -271,7 +273,7 @@ As a Customer, I want to view my previous build requests and generated recommend
 
 | Story | Endpoints / Commands |
 |---|---|
-| C1 | `GET /products` |
+| C1 | `GET /products`, `GET /categories` |
 | C2 | `GET /products/{productId}` (stock status via Inventory Service `GET /inventory/{productId}`) |
 | C3 | `GET /products/trending` |
 | C4 | `GET`, `POST /products/{productId}/reviews` |

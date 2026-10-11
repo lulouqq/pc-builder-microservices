@@ -30,7 +30,7 @@ There are exactly 5 microservices — do not add or merge services:
 
 ## Architecture and design
 
-- Every service follows the same layered structure (package `com.csci318.<service>`): `presentation`, `service`, `domain`, `infrastructure`.
+- Every service follows the same layered structure (package `com.csci318.<service>`, service name without the hyphen, e.g. `com.csci318.catalogservice`): `presentation`, `service`, `domain`, `infrastructure`.
 - Apply DDD where the domain model specifies it: entities, value objects, aggregate roots, domain events, domain services.
 - Keep it simple and appropriate for a university project — do not over-engineer.
 
