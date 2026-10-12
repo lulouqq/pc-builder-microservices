@@ -6,7 +6,7 @@ CSCI318 Software Engineering Practices & Principles – group project.
 
 | Service | Port | Status | Responsibilities |
 |---|---|---|---|
-| `catalog-service` | 8081 | skeleton | products, categories, specifications, prices, product reviews |
+| `catalog-service` | 8081 | C1, C4, C5 implemented | products, categories, specifications, prices, product reviews |
 | `inventory-service` | 8082 | placeholder | stock, inventory items, stock reservations |
 | `order-service` | 8083 | placeholder | cart, checkout, orders, order items, order/payment status |
 | `account-service` | 8084 | in progress (A1 complete; A2, A3 pending) | users, profiles, addresses, preferences |
