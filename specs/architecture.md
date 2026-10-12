@@ -34,6 +34,8 @@ Ports and base path for each service are listed in [api-endpoints.md](api-endpoi
 
 The architecture diagram does not show the Order Service → Recommendation Service call (R3, decision 7) or the Catalog Service → Inventory Service call (C2 stock status, decision 8).
 
+Calls to protected endpoints forward the customer's JWT in the `Authorization` header; calls to public endpoints need no token (decision 11).
+
 ### External Integration
 
 | From | To | Via |
@@ -70,4 +72,4 @@ The architecture diagram labels the checkout event `OrderCreated`; the event nam
 | 8 | Product stock status (C2) | Resolved | Catalog Service calls Inventory Service over REST (`GET /inventory/{productId}`) to show current stock status in product details (FR-02). |
 | 9 | Catalog events | Resolved | `ProductViewed` is the only Catalog event published to Kafka: it is published when product details are viewed (C2) and consumed by Catalog Service itself to maintain the trending list (C3, FR-03). `ProductCreated`, `ProductUpdated`, `ProductRemoved` and `ProductReviewed` are domain events internal to Catalog Service and are not published to Kafka. Payloads are listed in [Catalog Domain Events](domain-model.md#15-catalog-domain-events). |
 | 10 | Product category and listing categories | Resolved | `Product` holds a required `categoryId` (Product 0..\* — 1 Category). `GET /categories` is added under C1 so that customers can browse products by category. |
-| 11 | Admin authorisation | Open | C5, I3 and NFR-04 require administrative endpoints to be restricted to authorised administrators, but no mechanism is defined yet (no role on `User`, no token format for `AuthenticationResponse`). Deferred until Account Service is implemented; to be decided project-wide together with Account Service authentication (A2). Until then the Catalog Service C5 endpoints are not protected. |
+| 11 | Authentication and authorisation (A2, NFR-04) | Resolved | Account Service authenticates users on `POST /auth/login` (username + password, checked against the BCrypt `passwordHash`) and issues a stateless JWT: HS256 signed with a secret shared by all services, 1-hour lifetime, claims `sub` (userId), `role`, `iat`, `exp`; no refresh token, logout or server-side session. Every service validates the token itself with Spring Security as an OAuth2 resource server and the same secret, without calling Account Service. `User` has a `role` (CUSTOMER/ADMIN): `POST /users` always creates CUSTOMER, and one ADMIN account is created by Account Service at startup from configuration. Customer endpoints require the token's userId to own the resource; administrative endpoints (C5, I3 `PUT`, I1 REST) require ADMIN. Synchronous calls to protected endpoints forward the customer's `Authorization` header. Access levels and errors: [Authentication and Authorisation](api-endpoints.md#authentication-and-authorisation). |

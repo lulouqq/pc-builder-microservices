@@ -6,7 +6,7 @@
 
 *Overview diagram: class diagram of all five service domains (Account, Order, Inventory, Catalog, Recommendation) with the fields listed below and the associations between them — e.g. User 1 — 0..1 UserProfile / 0..1 Preference / 0..\* Address, User 1 — 0..\* Order, Order 1 — 1..\* OrderItem, OrderItem 0..\* — 1 Product, Order 1 — 0..\* StockReservation, InventoryItem 1 — 0..\* StockReservation, InventoryItem 1 — 1 Product, Product 0..\* — 1 Category, Product 1 — 1..\* Specification, User 1 — 0..\* BuildRequest, BuildRequest 1 — 1 PCBuild, PCBuild 1 — 1..\* BuildComponent, BuildComponent 0..\* — 1 Product, PCBuild 1 — 0..1 Recommendation. The diagram's "User Service Domain" label refers to the Account Service.*
 
-> The diagrams show User 1 — 1 Address; the relationship used in the specs is User 1 — 0..\* Address (a user can have several saved delivery addresses, A1). The diagrams also predate these additions, which are defined only in the tables below: `Review` (1.4), `StockNotificationSubscription` (2.3), `Order.deliveryAddressId` and `Order.paymentStatus` (3.1), `User.id` and `User.passwordHash` (4.1), `Address.id` (4.4), `BuildComponent.id` (5.3), and `Product.categoryId` and `Product.specifications` (1.1), which record the Product — Category and Product — Specification associations as fields.
+> The diagrams show User 1 — 1 Address; the relationship used in the specs is User 1 — 0..\* Address (a user can have several saved delivery addresses, A1). The diagrams also predate these additions, which are defined only in the tables below: `Review` (1.4), `StockNotificationSubscription` (2.3), `Order.deliveryAddressId` and `Order.paymentStatus` (3.1), `User.id`, `User.passwordHash` and `User.role` (4.1), `Address.id` (4.4), `BuildComponent.id` (5.3), and `Product.categoryId` and `Product.specifications` (1.1), which record the Product — Category and Product — Specification associations as fields.
 
 ## Domain Classes and Link to Requirements
 
@@ -197,6 +197,7 @@ Operations that are not valid for the current status are rejected with `OrderSta
 | email | String | Email of user | Required |
 | phone | String | Phone number of the user | Required |
 | passwordHash | String | Hashed password used for authentication (A2); the plain password is never stored | Required |
+| role | String | Role of the user (CUSTOMER/ADMIN), carried in the authentication token (A2, NFR-04): CUSTOMER for every account registered through `POST /users`; ADMIN only for the administrator account that Account Service creates at startup from configuration. It cannot be changed through the API | Required |
 
 ### 4.2 UserProfile
 
@@ -225,7 +226,7 @@ Operations that are not valid for the current status are rejected with `OrderSta
 
 ![Account service domain model](images/domain-model-account.png)
 
-> Note: the diagrams do not yet show `User.id`, `User.passwordHash` or `Address.id`; `User.id` is the primary identifier referenced as `userId` by Order, BuildRequest and the `/users/{userId}` endpoints.
+> Note: the diagrams do not yet show `User.id`, `User.passwordHash`, `User.role` or `Address.id`; `User.id` is the primary identifier referenced as `userId` by Order, BuildRequest and the `/users/{userId}` endpoints.
 
 ## 5. Recommendation Service Domain Model
 

@@ -833,3 +833,124 @@ Leave admin authorisation for after account microservice is implemented. Commit 
 - `specs/architecture.md`
 - `README.md`
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 16
+
+> Recorded as Prompt 12 on `feature/account-service` before `origin/main` was merged (renumbered to follow the Prompts 12–15 from `main`).
+
+**Date:** 2026-10-08
+
+**Goal:** Update the root README status of account-service after implementing A1 registration and user lookup (service work is recorded in `account-service/PROMPT_HISTORY.md`, Prompt 2).
+
+**Exact user prompt:**
+
+````text
+Lets move to A1 now.
+
+Implement basic user registration and user lookup:
+- User aggregate with UserProfile
+- repository and service
+- POST /users
+- GET /users/{userId}
+- use BCrypt for password hashing with spring-security-crypto
+- add basic 400/404 handling and tests
+
+Keep UserRegistered and UserProfileUpdated as internal domain events for now, not Kafka.
+
+Also update account-service README and root README so they no longer say account-service is a placeholder.
+
+Follow CLAUDE.md and specs.
+Run relevant tests.
+Update account-service/PROMPT_HISTORY.md for the service work and root PROMPT_HISTORY.md only for the root README change.
+Do not commit or push.
+````
+
+**Summary of changes:**
+
+- `README.md`: account-service status changed from `placeholder` to `in progress (A1 registration + user lookup)`.
+
+**Files created/modified:**
+
+- `README.md`
+- `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 17
+
+> Recorded as Prompt 13 on `feature/account-service` before `origin/main` was merged.
+
+**Date:** 2026-10-12
+
+**Goal:** Update the root README status of account-service now that A1 is complete (service work is recorded in `account-service/PROMPT_HISTORY.md`, Prompts 2–6).
+
+**Exact user prompt:**
+
+````text
+A1 is completed. Update the root README.md status of Account Service to reflect that A1 is complete.
+Do not change any implementation or specs. Update the root PROMPT_HISTORY.md for this change as required by the project rules.
+Do not commit or push.
+````
+
+**Summary of changes:**
+
+- `README.md`: account-service status changed from `in progress (A1 registration + user lookup)` to `in progress (A1 complete; A2, A3 pending)`. It stays "in progress" because A2 (authentication) and A3 (preferences) are not implemented yet.
+- No implementation or spec changes.
+
+**Files created/modified:**
+
+- `README.md`
+- `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 18
+
+**Date:** 2026-10-12
+
+**Goal:** Agree the A2 authentication design (JWT + Spring Security), record it in the Account/API/architecture specs and close Architecture Decision 11. Specs only — no implementation.
+
+**Exact user prompt:**
+
+````text
+Consider a JWT/Spring Security solution for A2. Update only the required Account/API/architecture specs and close Decision 11 with the agreed authentication design. Do not write any implementation yet. Update the root PROMPT_HISTORY.md as required. Do not commit or push.
+````
+
+**Decisions confirmed by the user during this prompt:**
+
+- Administrators: add `role` (CUSTOMER/ADMIN) to `User`; `POST /users` always creates CUSTOMER; one ADMIN account is created by Account Service at startup from configuration.
+- Scope: the JWT design applies to all services — every service validates the token with the shared secret; service-to-service calls forward the customer's token.
+
+The other choices follow the defaults proposed in the A2 review (`account-service/PROMPT_HISTORY.md`, Prompt 7).
+
+**Summary of changes:**
+
+- `specs/architecture.md`:
+  - Decision 11 renamed to "Authentication and authorisation (A2, NFR-04)" and changed from Open to **Resolved**. It now describes the design:
+    - login with username + password checked against the BCrypt hash;
+    - stateless HS256 JWT (shared secret, 1-hour lifetime, claims `sub`, `role`, `iat`, `exp`, no refresh/logout/session);
+    - every service validates tokens with Spring Security as an OAuth2 resource server;
+    - CUSTOMER/ADMIN roles with a seeded admin;
+    - owner check on customer endpoints, ADMIN on C5, I3 `PUT` and the I1 REST endpoints;
+    - the `Authorization` header is forwarded on synchronous calls.
+  - "Synchronous REST Calls": added a note that calls to protected endpoints forward the customer's JWT.
+- `specs/api-endpoints.md`:
+  - New "Account Service DTOs (A2)" table: `LoginRequest` (username, password); `AuthenticationResponse` (token, tokenType `Bearer`, expiresAt, userId, role). Also a note on the login errors: 400 for missing fields; 401 for an unknown user or a wrong password, with the same message.
+  - New "Authentication and Authorisation" section:
+    - token format and the `Authorization: Bearer` header;
+    - Public / Customer (owner) / Admin access table covering every endpoint in all five services;
+    - 401/403 rules, and when an owner check gives 403 rather than 404;
+    - token forwarding for inter-service calls; `GET /inventory/{productId}` stays public for C2; the H2 console is not protected.
+  - The contract rule on account-specific endpoints now links to the new section. The error-contract rows for `AuthenticationRequired` (now also for `POST /auth/login`) and `AccessDenied` are more precise.
+- `specs/domain-model.md`: `User.role` (String, CUSTOMER/ADMIN, Required) added to 4.1. Both "not shown in the diagrams" notes now list `User.role`.
+- `user-stories.md`, `requirements.md`, `cqrs.md` and `event-sourcing.md` are unchanged: A2 still uses `User` only and has no domain events.
+- No implementation changes.
+
+**Files created/modified:**
+
+- `specs/architecture.md`
+- `specs/api-endpoints.md`
+- `specs/domain-model.md`
+- `PROMPT_HISTORY.md`

@@ -15,6 +15,7 @@
     <!-- Only services with a pom.xml are listed; add the others as they are implemented. -->
     <modules>
         <module>catalog-service</module>
+        <module>account-service</module>
     </modules>
 
     <parent>
