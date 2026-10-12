@@ -104,6 +104,15 @@ Field names and types follow the [Catalog Service Domain Model](domain-model.md#
 | A3 | GET | /users/{userId}/preferences | None | 200 OK (PreferenceResponse) | Retrieve saved recommendation preferences |
 | A3 | PUT | /users/{userId}/preferences | PreferenceUpdateRequest | 200 OK (PreferenceResponse) | Save or update recommendation preferences |
 
+#### Account Service DTOs (A2)
+
+| DTO | Fields |
+|---|---|
+| LoginRequest | username, password |
+| AuthenticationResponse | token, tokenType (`Bearer`), expiresAt (ISO-8601 UTC timestamp), userId, role (`CUSTOMER` / `ADMIN`) |
+
+> `POST /auth/login` returns `ValidationFailed` (400) when `username` or `password` is missing or blank, and `AuthenticationRequired` (401) for an unknown username or a wrong password, with the same message for both. The administrator account logs in through the same endpoint. See [Authentication and Authorisation](#authentication-and-authorisation).
+
 ### Recommendation Service (http://localhost:8085/api)
 
 | Feature | Method | Endpoint Path | Request Body | Response (Success) | Description |
@@ -126,15 +135,37 @@ Field names and types follow the [Catalog Service Domain Model](domain-model.md#
 - Successful queries and updates return 200 OK.
 - Successful deletions that do not require a response body return 204 No Content.
 - Inter-service asynchronous communication uses Kafka events where specified by the system architecture.
-- Account-specific and administrative endpoints require authentication and appropriate authorization.
+- Account-specific and administrative endpoints require authentication and appropriate authorization — see [Authentication and Authorisation](#authentication-and-authorisation).
+
+### Authentication and Authorisation
+
+Agreed design for A2 / NFR-04 ([Architecture Decision 11](architecture.md#architecture-decisions)):
+
+- `POST /auth/login` (Account Service) returns a JSON Web Token (JWT) in `AuthenticationResponse.token`.
+- The token is signed with HS256 using a secret shared by all services (configuration property `security.jwt.secret`, same value in every service, at least 256 bits). Claims: `sub` (the user's `id`), `role` (`CUSTOMER` / `ADMIN`), `iat`, `exp`. Lifetime: 1 hour. There is no refresh token and no logout endpoint; a token is valid until it expires.
+- Clients send the token on every non-public request in the header `Authorization: Bearer <token>`.
+- Every service validates the token itself (signature and expiry) with Spring Security as a stateless OAuth2 resource server; there is no server-side session or token store and no call back to Account Service.
+
+| Access | Rule | Endpoints |
+|---|---|---|
+| Public | No token required | Catalog: `GET /products`, `GET /categories`, `GET /products/{productId}`, `GET /products/trending`, `GET /products/{productId}/reviews`. Inventory: `GET /inventory/{productId}`. Account: `POST /users`, `POST /auth/login`. Recommendation: `POST /compatibility/validate` |
+| Customer (owner) | Valid token, and the token's `sub` must be the user the request is for: the `{userId}` path parameter, the `userId` in the request body, or the `userId` stored on the order / recommendation | Account: `GET /users/{userId}`, `PUT /users/{userId}/profile`, all `/users/{userId}/addresses` endpoints, `GET`/`PUT /users/{userId}/preferences`. Catalog: `POST /products/{productId}/reviews`. Inventory: `POST /inventory/{productId}/notifications`. Order: all Order Service endpoints. Recommendation: `POST /recommendations`, `GET /recommendations/{recommendationId}`, `GET /users/{userId}/recommendations` |
+| Admin | Valid token with `role` = `ADMIN` | Catalog C5: `POST /products`, `PUT`/`DELETE /products/{productId}`, `POST /categories`, `PUT`/`DELETE /categories/{categoryId}`. Inventory I3: `PUT /inventory/{productId}`. Inventory I1: `POST /inventory/{productId}/reservations`, `DELETE /inventory/{productId}/reservations/{reservationId}` (direct use and testing only, Architecture Decision 5) |
+
+- A missing, malformed or expired token, or one with an invalid signature, on a non-public endpoint returns `AuthenticationRequired` (401).
+- A valid token for another user, or a `CUSTOMER` token on an admin endpoint, returns `AccessDenied` (403). The `ADMIN` role grants the admin endpoints only; it does not bypass the owner check.
+- When the owner is given by `{userId}` or by the request body, the owner check happens before the resource is looked up (another user's id returns 403, not 404). When the owner is stored on the resource (order, recommendation), an unknown id returns 404 and another user's resource returns 403.
+- Synchronous inter-service calls to protected endpoints forward the incoming `Authorization` header (Order → Account for saved addresses, Order → Recommendation for R3, Recommendation → Account for preferences). Calls to public endpoints (Catalog → Inventory, Order/Recommendation → Catalog, Recommendation → Inventory) need no token. Kafka events do not carry tokens.
+- `GET /inventory/{productId}` stays public because Catalog Service calls it for public product details (C2).
+- The H2 console is a development tool and is not protected.
 
 ### Error Response Contract
 
 | Error Code | HTTP Status | Applies To | Meaning |
 |---|---|---|---|
 | ValidationFailed | 400 Bad Request | All services | Request body, query parameter, or path parameter is invalid |
-| AuthenticationRequired | 401 Unauthorized | Protected endpoints | Authentication is missing or invalid |
-| AccessDenied | 403 Forbidden | Protected/admin endpoints | Authenticated user does not have permission to perform the operation |
+| AuthenticationRequired | 401 Unauthorized | Protected endpoints, `POST /auth/login` | Authentication is missing or invalid: no token, or a malformed, expired or wrongly signed token; or wrong login credentials |
+| AccessDenied | 403 Forbidden | Protected/admin endpoints | Authenticated user does not have permission to perform the operation: not the owner of the resource, or not `ADMIN` for an admin endpoint |
 | ResourceNotFound | 404 Not Found | All services | Requested resource does not exist |
 | StockUnavailable | 409 Conflict | Inventory, Order | Requested quantity cannot be reserved because insufficient stock is available |
 | ReservationConflict | 409 Conflict | Inventory | Stock reservation is invalid, expired, or cannot be modified |

@@ -321,3 +321,85 @@ Don't commit or push.
 - `account-service/src/test/java/com/csci318/accountservice/presentation/AddressControllerTest.java` (new)
 - `account-service/README.md`
 - `account-service/PROMPT_HISTORY.md`
+
+---
+
+## Prompt 7
+
+**Date:** 2026-10-12
+
+**Goal:** Work out exactly what A2 (Authenticate Customer) requires, list everything the specs leave undefined, and list the decisions needed before implementation. Review only — no implementation or spec changes.
+
+**Exact user prompt:**
+
+````text
+Read CLAUDE.md, the relevant Account specs, account-service/PROMPT_HISTORY.md, and the current state of the account-service.
+Figure out exactly what A2 requires. Summarise everything that is not defined by the specification and list the decisions that need to be made before implementation.
+Do not change any implementation or specs. Only append this review and the exact prompt to account-service/PROMPT_HISTORY.md.
+````
+
+**Specs read:** `user-stories.md` (A2 story, acceptance rules, story mapping, endpoint mapping), `api-endpoints.md` (Account Service endpoints, contract rules, error contract), `requirements.md` (FR-16, NFR-04), `domain-model.md` (4.1 User), `architecture.md` (REST callers, Kafka flows, Decision 11). `cqrs.md` and `event-sourcing.md` cover Inventory only and say nothing about Account or authentication.
+
+**State at review time:** branch `feature/account-service`, working tree clean, A1 complete (Prompt 6). `./mvnw test -pl account-service` → 35 tests, 0 failures. Only `catalog-service` and `account-service` contain code; `inventory-service`, `order-service` and `recommendation-service` are still README/PROMPT_HISTORY placeholders.
+
+### What the specs define for A2
+
+| Source | Requirement |
+|---|---|
+| user-stories.md A2 | "As a Registered Customer, I want to log in to my account, so that I can securely access account-specific features." Acceptance rules: (1) registered customers can authenticate using their account credentials; (2) account-specific functionality requires authentication; (3) invalid authentication attempts do not grant access. |
+| user-stories.md mapping | Domain class: `User` only. Domain events: **None**. Endpoint: `POST /auth/login`. |
+| api-endpoints.md | `POST /auth/login` (Account Service, `http://localhost:8084/api`), body `LoginRequest` → `200 OK (AuthenticationResponse)`, "Authenticate a registered customer". Rule: "Account-specific and administrative endpoints require authentication and appropriate authorization." |
+| api-endpoints.md error contract | `AuthenticationRequired` 401 (protected endpoints; authentication missing or invalid), `AccessDenied` 403 (authenticated user lacks permission). `ValidationFailed` 400, `InternalServiceError` 500 also apply. |
+| requirements.md | FR-16: registered customers authenticate (log in) before accessing account-specific features. NFR-04: account data and administrative endpoints require authentication **and authorisation**. |
+| domain-model.md 4.1 | `User.passwordHash` (String, required) is the credential "used for authentication (A2); the plain password is never stored". No role, token, session or login-attempt fields. |
+| architecture.md Decision 11 (Open) | Admin authorisation has no mechanism yet ("no role on `User`, no token format for `AuthenticationResponse`"); to be decided project-wide together with A2. |
+
+Already in place that A2 can reuse: BCrypt `PasswordEncoder` bean (`PasswordEncoderConfig`, `spring-security-crypto`), unique `username` column, `ErrorResponse` + `GlobalExceptionHandler` (no 401/403 handlers yet). Missing: `UserRepository.findByUsername`, any login endpoint, any request authentication.
+
+### Not defined by the specification
+
+1. **`LoginRequest` fields.** "Account credentials" is not specified. Only `username` is unique (`email` is not), so email login is not safe without a spec change.
+2. **`AuthenticationResponse` fields and token format** (explicitly called undefined in Decision 11). Nothing says whether login returns a token at all, what kind (signed JWT, opaque random token, HTTP Basic, server session), or which fields (token, type, expiry, userId, user details).
+3. **How the client proves authentication on later requests** (e.g. `Authorization: Bearer <token>` header, cookie, Basic auth on every call).
+4. **Token lifetime / expiry, logout, revocation.** No expiry rule, and no logout endpoint exists in the specs.
+5. **Where tokens or sessions are stored.** An opaque token needs server-side state, but the domain model has no class for it; a stateless signed token needs a signing secret and its configuration.
+6. **Exactly which endpoints are "account-specific".** Not listed. Obvious candidates: `GET /users/{userId}`, `PUT /users/{userId}/profile`, all `/users/{userId}/addresses` endpoints, and later A3 `/users/{userId}/preferences`. Must be public: `POST /users`, `POST /auth/login`.
+7. **What "appropriate authorization" means for customers.** Not stated whether a logged-in user may only access their own `/users/{userId}/...` resources (ownership check → 403 `AccessDenied`), or whether any authenticated user may.
+8. **Error precedence:** for a request with a valid token to another (or non-existent) `userId`, whether to return 403 or 404.
+9. **Login failure responses.** The error contract applies `AuthenticationRequired` to "protected endpoints"; it does not say what `POST /auth/login` returns for unknown username / wrong password (401?), whether the two cases get the same message, or whether missing fields are 400 `ValidationFailed` or 401.
+10. **Service-to-service calls.** Order Service → Account Service (saved addresses for O2/FR-10, user checks for O5) and Recommendation Service → Account Service (preferences for A3/R1) are synchronous REST calls to account-specific data. Nothing says whether they forward the customer's token, use a separate service credential, or are exempt.
+11. **Scope across services.** "Account-specific functionality requires authentication" could include other services' user endpoints (`GET /users/{userId}/orders`, `GET /users/{userId}/recommendations`, `POST /products/{productId}/reviews` with `userId` in the body). Not stated whether A2 covers only Account Service or defines a mechanism the other services must also verify.
+12. **Administrator identity (Decision 11).** NFR-04 / C5 / I3 need administrators, but `User` has no role and there is no way to create an admin. Adding a role would be a domain-model change.
+13. **Brute-force protection** (lockout, attempt limits) and username case-sensitivity at login — not mentioned.
+14. **Library / framework choice.** CLAUDE.md allows extra libraries only when required. Spring Security (filter chain) vs a small `HandlerInterceptor`, and a JWT library (e.g. jjwt / Nimbus) vs an opaque token, are not decided anywhere.
+15. **DTO definitions.** api-endpoints.md has a DTO table for Catalog only; there is no Account DTO table, so none of `LoginRequest`, `AuthenticationResponse` (or the A1 DTOs) are formally defined.
+
+### Decisions needed before implementation (with a suggested default)
+
+| # | Decision | Suggested default (simplest that meets the specs) |
+|---|---|---|
+| D1 | `LoginRequest` fields | `username`, `password` (username is the only unique credential). |
+| D2 | Token type | Either (a) opaque random token stored in Account DB with expiry — no new library, but a new persisted class not in the domain model, and other services cannot verify it without a new endpoint (not in specs); or (b) HMAC-signed JWT with a shared secret — other services can verify it locally, but needs a JWT library or hand-written HMAC code. Recommend (b) if Order/Recommendation endpoints will also be protected, otherwise (a). **Team decision, project-wide (Decision 11).** |
+| D3 | `AuthenticationResponse` fields | `token`, `tokenType` ("Bearer"), `expiresAt`, `userId` (the client needs `userId` for `/users/{userId}/...`). |
+| D4 | Transport | `Authorization: Bearer <token>` header. |
+| D5 | Expiry / logout | Fixed lifetime (e.g. 1 hour) from configuration; no logout or refresh endpoint (not in specs). |
+| D6 | Protected endpoints in account-service | All `/users/{userId}/**` and `GET /users/{userId}`; public: `POST /users`, `POST /auth/login`, H2 console. |
+| D7 | Customer authorisation | Ownership: token's userId must equal path `userId`, otherwise 403 `AccessDenied`; checked before loading the user (so another user's id gives 403, not 404). |
+| D8 | Login failure | 401 `AuthenticationRequired` with one generic message for unknown username and wrong password; missing `username`/`password` → 400 `ValidationFailed`. Missing/invalid/expired token on a protected endpoint → 401 `AuthenticationRequired`. |
+| D9 | Mechanism | `HandlerInterceptor` (or one servlet filter) in `presentation`/`infrastructure`, reusing the existing BCrypt encoder; no `spring-boot-starter-security` (avoids CSRF/default-login configuration). |
+| D10 | Service-to-service calls | Calling service forwards the customer's bearer token; no separate service credentials. Can be implemented when Order/Recommendation exist, but D2 must allow it. |
+| D11 | Other services' user endpoints | Out of scope for A2 implementation in account-service; record the decision so other services follow D2/D4 later. |
+| D12 | Admin authorisation (Decision 11) | Keep deferred (still Open), or add a `role` field to `User` — requires a spec change to domain-model.md 4.1 and a way to create admins. Needs explicit team decision. |
+| D13 | Domain events | None (spec says A2 has no events); no `UserLoggedIn`/`LoginFailed`. |
+| D14 | Brute-force protection / case-sensitivity | None; username match is case-sensitive, as in registration. |
+
+### Impact notes for implementation
+
+- All existing A1 MockMvc tests that call `GET /users/{userId}`, profile or address endpoints will need a valid token (e.g. a test helper that registers and logs in), and new tests are needed for 401 (missing/invalid/expired token, wrong password, unknown user) and 403 (another user's id).
+- `GlobalExceptionHandler` needs `AuthenticationRequired` (401) and `AccessDenied` (403) mappings.
+- `UserRepository` needs `findByUsername`.
+- Once D1–D3 are agreed, `specs/api-endpoints.md` should get an Account Service DTO table (`LoginRequest`, `AuthenticationResponse`) and Decision 11 should be updated — spec changes to be made only on request.
+
+**Files created/modified:**
+
+- `account-service/PROMPT_HISTORY.md` (this entry only)
