@@ -720,3 +720,43 @@ Now check all the changes and inconsistences we fixed for this session, and in p
 **Files created/modified:**
 
 - `PROMPT_HISTORY.md` (this entry only)
+
+---
+
+## Prompt 12
+
+**Date:** 2026-10-08
+
+**Goal:** Update the root README status of account-service after implementing A1 registration and user lookup (service work is recorded in `account-service/PROMPT_HISTORY.md`, Prompt 2).
+
+**Exact user prompt:**
+
+````text
+Lets move to A1 now.
+
+Implement basic user registration and user lookup:
+- User aggregate with UserProfile
+- repository and service
+- POST /users
+- GET /users/{userId}
+- use BCrypt for password hashing with spring-security-crypto
+- add basic 400/404 handling and tests
+
+Keep UserRegistered and UserProfileUpdated as internal domain events for now, not Kafka.
+
+Also update account-service README and root README so they no longer say account-service is a placeholder.
+
+Follow CLAUDE.md and specs.
+Run relevant tests.
+Update account-service/PROMPT_HISTORY.md for the service work and root PROMPT_HISTORY.md only for the root README change.
+Do not commit or push.
+````
+
+**Summary of changes:**
+
+- `README.md`: account-service status changed from `placeholder` to `in progress (A1 registration + user lookup)`.
+
+**Files created/modified:**
+
+- `README.md`
+- `PROMPT_HISTORY.md`
