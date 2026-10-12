@@ -1,6 +1,7 @@
 package com.csci318.accountservice.presentation;
 
 import com.csci318.accountservice.domain.User;
+import com.csci318.accountservice.domain.UserProfileUpdated;
 import com.csci318.accountservice.domain.UserRegistered;
 import com.csci318.accountservice.infrastructure.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -143,6 +145,83 @@ class UserControllerTest {
         mockMvc.perform(post("/users").contentType(MediaType.APPLICATION_JSON).content("{not json"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ValidationFailed"));
+    }
+
+    @Test
+    void updateProfileReturnsUpdatedUserAndPublishesUserProfileUpdated() throws Exception {
+        String userId = register(VALID_REGISTRATION);
+
+        mockMvc.perform(put("/users/{userId}/profile", userId).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName": "Alicia", "lastName": "Jones"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(userId))
+                .andExpect(jsonPath("$.username").value("alice"))
+                .andExpect(jsonPath("$.firstName").value("Alicia"))
+                .andExpect(jsonPath("$.lastName").value("Jones"))
+                .andExpect(jsonPath("$.passwordHash").doesNotExist());
+
+        assertThat(events.stream(UserProfileUpdated.class))
+                .singleElement()
+                .satisfies(event -> {
+                    assertThat(event.userId()).isEqualTo(userId);
+                    assertThat(event.firstName()).isEqualTo("Alicia");
+                    assertThat(event.lastName()).isEqualTo("Jones");
+                });
+
+        mockMvc.perform(get("/users/{userId}", userId))
+                .andExpect(jsonPath("$.firstName").value("Alicia"))
+                .andExpect(jsonPath("$.lastName").value("Jones"));
+    }
+
+    @Test
+    void updateProfileReplacesWholeProfile() throws Exception {
+        String userId = register(VALID_REGISTRATION);
+
+        mockMvc.perform(put("/users/{userId}/profile", userId).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName": "Alicia"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.firstName").value("Alicia"))
+                .andExpect(jsonPath("$.lastName").doesNotExist());
+    }
+
+    @Test
+    void updateProfileWithoutChangeDoesNotPublishUserProfileUpdated() throws Exception {
+        String userId = register(VALID_REGISTRATION);
+
+        mockMvc.perform(put("/users/{userId}/profile", userId).contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName": "Alice", "lastName": "Smith"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.firstName").value("Alice"));
+
+        assertThat(events.stream(UserProfileUpdated.class)).isEmpty();
+    }
+
+    @Test
+    void updateEmptyProfileWithEmptyProfileDoesNotPublishUserProfileUpdated() throws Exception {
+        String userId = register("""
+                {"username": "bob", "email": "bob@example.com", "phone": "0400000000", "password": "secret123"}
+                """);
+
+        mockMvc.perform(put("/users/{userId}/profile", userId).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk());
+
+        assertThat(events.stream(UserProfileUpdated.class)).isEmpty();
+    }
+
+    @Test
+    void updateProfileOfUnknownUserReturns404() throws Exception {
+        mockMvc.perform(put("/users/{userId}/profile", "does-not-exist").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"firstName": "Alicia"}
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("ResourceNotFound"));
     }
 
     private String register(String body) throws Exception {

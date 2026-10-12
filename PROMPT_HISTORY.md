@@ -760,3 +760,29 @@ Do not commit or push.
 
 - `README.md`
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 13
+
+**Date:** 2026-10-12
+
+**Goal:** Update the root README status of account-service now that A1 is complete (service work is recorded in `account-service/PROMPT_HISTORY.md`, Prompts 2–6).
+
+**Exact user prompt:**
+
+````text
+A1 is completed. Update the root README.md status of Account Service to reflect that A1 is complete.
+Do not change any implementation or specs. Update the root PROMPT_HISTORY.md for this change as required by the project rules.
+Do not commit or push.
+````
+
+**Summary of changes:**
+
+- `README.md`: account-service status changed from `in progress (A1 registration + user lookup)` to `in progress (A1 complete; A2, A3 pending)`. It stays "in progress" because A2 (authentication) and A3 (preferences) are not implemented yet.
+- No implementation or spec changes.
+
+**Files created/modified:**
+
+- `README.md`
+- `PROMPT_HISTORY.md`

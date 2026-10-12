@@ -1,5 +1,6 @@
 package com.csci318.accountservice.service;
 
+import com.csci318.accountservice.domain.Address;
 import com.csci318.accountservice.domain.User;
 import com.csci318.accountservice.domain.UserProfile;
 import com.csci318.accountservice.domain.ValidationException;
@@ -8,6 +9,8 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 public class UserService {
@@ -48,5 +51,43 @@ public class UserService {
     public User getUser(String userId) {
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + userId));
+    }
+
+    @Transactional
+    public User updateProfile(String userId, UpdateProfileCommand command) {
+        User user = getUser(userId);
+        user.updateProfile(new UserProfile(command.firstName(), command.lastName()));
+        // save publishes UserProfileUpdated (if the profile changed); dirty checking alone would not.
+        return userRepository.save(user);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Address> getAddresses(String userId) {
+        return List.copyOf(getUser(userId).getAddresses());
+    }
+
+    @Transactional
+    public Address addAddress(String userId, AddressCommand command) {
+        return getUser(userId).addAddress(command.streetNo(), command.streetName(), command.suburb(),
+                command.city(), command.state(), command.postCode());
+    }
+
+    @Transactional
+    public Address updateAddress(String userId, String addressId, AddressCommand command) {
+        return getUser(userId)
+                .updateAddress(addressId, command.streetNo(), command.streetName(), command.suburb(),
+                        command.city(), command.state(), command.postCode())
+                .orElseThrow(() -> addressNotFound(addressId));
+    }
+
+    @Transactional
+    public void removeAddress(String userId, String addressId) {
+        if (!getUser(userId).removeAddress(addressId)) {
+            throw addressNotFound(addressId);
+        }
+    }
+
+    private static ResourceNotFoundException addressNotFound(String addressId) {
+        return new ResourceNotFoundException("Address not found: " + addressId);
     }
 }

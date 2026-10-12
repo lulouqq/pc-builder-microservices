@@ -1,13 +1,21 @@
 package com.csci318.accountservice.domain;
 
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import org.springframework.data.domain.AbstractAggregateRoot;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -36,6 +44,10 @@ public class User extends AbstractAggregateRoot<User> {
     @Embedded
     private UserProfile profile;
 
+    @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
+    @JoinColumn(name = "user_id", nullable = false, updatable = false)
+    private List<Address> addresses = new ArrayList<>();
+
     protected User() {
         // for JPA
     }
@@ -61,6 +73,47 @@ public class User extends AbstractAggregateRoot<User> {
         User user = new User(UUID.randomUUID().toString(), username, email, phone, passwordHash, profile);
         user.registerEvent(new UserRegistered(user.id, user.username, Instant.now()));
         return user;
+    }
+
+    /**
+     * Replaces the profile. UserProfileUpdated is raised only when the profile actually changes.
+     */
+    public void updateProfile(UserProfile newProfile) {
+        UserProfile updated = newProfile != null ? newProfile : new UserProfile(null, null);
+        if (updated.equals(getProfileOrEmpty())) {
+            return;
+        }
+        this.profile = updated;
+        registerEvent(new UserProfileUpdated(id, updated.firstName(), updated.lastName(), Instant.now()));
+    }
+
+    public Address addAddress(Integer streetNo, String streetName, String suburb, String city, String state,
+                              Integer postCode) {
+        Address address = new Address(streetNo, streetName, suburb, city, state, postCode);
+        addresses.add(address);
+        return address;
+    }
+
+    /** Returns the updated address, or empty if this user has no address with the given id. */
+    public Optional<Address> updateAddress(String addressId, Integer streetNo, String streetName, String suburb,
+                                           String city, String state, Integer postCode) {
+        Optional<Address> address = findAddress(addressId);
+        address.ifPresent(a -> a.update(streetNo, streetName, suburb, city, state, postCode));
+        return address;
+    }
+
+    /** Returns false if this user has no address with the given id. */
+    public boolean removeAddress(String addressId) {
+        return addresses.removeIf(a -> a.getId().equals(addressId));
+    }
+
+    public Optional<Address> findAddress(String addressId) {
+        return addresses.stream().filter(a -> a.getId().equals(addressId)).findFirst();
+    }
+
+    // Hibernate loads an embedded profile whose columns are all null as null.
+    private UserProfile getProfileOrEmpty() {
+        return Objects.requireNonNullElseGet(profile, () -> new UserProfile(null, null));
     }
 
     private static void requireText(String value, String field) {
@@ -91,5 +144,9 @@ public class User extends AbstractAggregateRoot<User> {
 
     public UserProfile getProfile() {
         return profile;
+    }
+
+    public List<Address> getAddresses() {
+        return Collections.unmodifiableList(addresses);
     }
 }
