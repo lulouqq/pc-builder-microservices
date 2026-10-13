@@ -111,4 +111,29 @@ class UserTest {
         assertThat(admin.getRole()).isEqualTo(Role.ADMIN);
         assertThat(admin.getProfile()).isNull();
     }
+
+    @Test
+    void updatePreferenceReplacesAndClearsPreference() {
+        User user = User.register("alice", "alice@example.com", "0400000000", "hash", null);
+        assertThat(user.getPreference().preference()).isNull();
+
+        user.updatePreference(new Preference("Quiet gaming PC"));
+        assertThat(user.getPreference().preference()).isEqualTo("Quiet gaming PC");
+
+        user.updatePreference(new Preference("Small form factor"));
+        assertThat(user.getPreference().preference()).isEqualTo("Small form factor");
+
+        user.updatePreference(new Preference("   "));
+        assertThat(user.getPreference().preference()).isNull();
+
+        user.updatePreference(new Preference("Quiet gaming PC"));
+        user.updatePreference(null);
+        assertThat(user.getPreference().preference()).isNull();
+    }
+
+    @Test
+    void blankPreferenceEqualsNoPreference() {
+        assertThat(new Preference(" ")).isEqualTo(new Preference(null));
+        assertThat(new Preference("")).isEqualTo(new Preference(null));
+    }
 }

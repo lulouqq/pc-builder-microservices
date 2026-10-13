@@ -50,6 +50,9 @@ public class User extends AbstractAggregateRoot<User> {
     @Embedded
     private UserProfile profile;
 
+    @Embedded
+    private Preference preference;
+
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "user_id", nullable = false, updatable = false)
     private List<Address> addresses = new ArrayList<>();
@@ -105,6 +108,19 @@ public class User extends AbstractAggregateRoot<User> {
         }
         this.profile = updated;
         registerEvent(new UserProfileUpdated(id, updated.firstName(), updated.lastName(), Instant.now()));
+    }
+
+    /**
+     * Replaces the saved preference; null or blank clears it. PreferenceUpdated is raised only when the value
+     * actually changes.
+     */
+    public void updatePreference(Preference newPreference) {
+        Preference updated = newPreference != null ? newPreference : new Preference(null);
+        if (updated.equals(getPreference())) {
+            return;
+        }
+        this.preference = updated;
+        registerEvent(new PreferenceUpdated(id, updated.preference(), Instant.now()));
     }
 
     public Address addAddress(Integer streetNo, String streetName, String suburb, String city, String state,
@@ -168,6 +184,12 @@ public class User extends AbstractAggregateRoot<User> {
 
     public UserProfile getProfile() {
         return profile;
+    }
+
+    /** Never null: a user without a saved preference has a Preference whose value is null. */
+    public Preference getPreference() {
+        // Hibernate loads an embedded preference whose column is null as null.
+        return Objects.requireNonNullElseGet(preference, () -> new Preference(null));
     }
 
     public List<Address> getAddresses() {

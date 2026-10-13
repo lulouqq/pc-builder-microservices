@@ -27,6 +27,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -36,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * A2 access rules: account endpoints need a valid token (401) for the user in the path (403).
+ * A2 access rules: account endpoints (A1, A3) need a valid token (401) for the user in the path (403).
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -135,6 +136,10 @@ class AccessControlTest {
         mockMvc.perform(get("/users/{userId}/addresses", bobId)
                         .header(HttpHeaders.AUTHORIZATION, bearer(bobId, Role.CUSTOMER)))
                 .andExpect(jsonPath("$.length()").value(0));
+        mockMvc.perform(get("/users/{userId}/preferences", bobId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(bobId, Role.CUSTOMER)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preference").value(nullValue()));
     }
 
     @Test
@@ -167,7 +172,7 @@ class AccessControlTest {
                 .andExpect(status().isOk());
     }
 
-    /** One request per protected A1 endpoint for the given user. */
+    /** One request per protected A1 and A3 endpoint for the given user. */
     private List<MockHttpServletRequestBuilder> accountRequests(String userId) {
         return List.of(
                 get("/users/{userId}", userId),
@@ -177,7 +182,10 @@ class AccessControlTest {
                 post("/users/{userId}/addresses", userId).contentType(MediaType.APPLICATION_JSON).content(ADDRESS),
                 put("/users/{userId}/addresses/{addressId}", userId, "a1").contentType(MediaType.APPLICATION_JSON)
                         .content(ADDRESS),
-                delete("/users/{userId}/addresses/{addressId}", userId, "a1"));
+                delete("/users/{userId}/addresses/{addressId}", userId, "a1"),
+                get("/users/{userId}/preferences", userId),
+                put("/users/{userId}/preferences", userId).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"preference\": \"Mallory's choice\"}"));
     }
 
     private String bearer(String userId, Role role) {
