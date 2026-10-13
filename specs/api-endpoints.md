@@ -113,6 +113,17 @@ Field names and types follow the [Catalog Service Domain Model](domain-model.md#
 
 > `POST /auth/login` returns `ValidationFailed` (400) when `username` or `password` is missing or blank, and `AuthenticationRequired` (401) for an unknown username or a wrong password, with the same message for both. The administrator account logs in through the same endpoint. See [Authentication and Authorisation](#authentication-and-authorisation).
 
+#### Account Service DTOs (A3)
+
+Field names and types follow [Preference](domain-model.md#43-preference).
+
+| DTO | Fields |
+|---|---|
+| PreferenceUpdateRequest | preference (free-text String, optional) |
+| PreferenceResponse | userId, preference (`null` when no preference is saved) |
+
+> `GET /users/{userId}/preferences` returns 200 with `preference` = `null` when the user has not saved a preference, and `ResourceNotFound` (404) for an unknown user. `PUT /users/{userId}/preferences` replaces the saved preference; a `preference` that is missing, `null` or blank clears it. The preference has no maximum length. `PUT` raises the domain event `PreferenceUpdated` only when the value changes; it is internal to Account Service and not published to Kafka.
+
 ### Recommendation Service (http://localhost:8085/api)
 
 | Feature | Method | Endpoint Path | Request Body | Response (Success) | Description |

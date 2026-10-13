@@ -954,3 +954,44 @@ The other choices follow the defaults proposed in the A2 review (`account-servic
 - `specs/api-endpoints.md`
 - `specs/domain-model.md`
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 19
+
+**Date:** 2026-10-13
+
+**Goal:** Record the agreed A3 (Save Recommendation Preferences) API decisions in `specs/api-endpoints.md` as an Account Service DTO table. Specs only — no implementation.
+
+**Exact user prompt:**
+
+````text
+Add the A3 DTO table to specs/api-endpoints.md and add to root PROMPT_HISTORY.md
+For D3 not set fake limitation 1000. For free-text preference better to save string as TEXT/CLOB without API validation for length.
+Don't implement A3 yet. This step is only for updating the API spec and recording the decision.
+````
+
+**Decisions (from the A3 review, `account-service/PROMPT_HISTORY.md` Prompts 10–11, with D3 revised here):**
+
+| # | Decision |
+|---|---|
+| D1 | `PreferenceUpdateRequest` = `{ "preference" }`; `PreferenceResponse` = `{ "userId", "preference" }`. |
+| D2 | `Preference` stays one free-text String (domain-model.md 4.3); no structured fields. |
+| D3 (revised) | No maximum length and no length validation in the API. The value is stored as a large text column (TEXT/CLOB, e.g. `@Lob` / `columnDefinition`), so a long value is not cut off by the default `varchar(255)`. No artificial 1000-character limit. This replaces the note in `account-service/PROMPT_HISTORY.md` Prompt 11 that a long value would return 500. |
+| D4 | `GET` for an existing user with no saved preference → 200 with `preference: null`; unknown user → 404 `ResourceNotFound`. |
+| D5 | `PUT` with a missing, `null` or blank `preference` clears it. |
+| D6 | `PreferenceUpdated` is raised only when the value changes; internal domain event, not Kafka. |
+| D7 | The preference is not part of `UserResponse`. |
+| D8 | Recommendation Service integration is deferred to the recommendation-service implementation. |
+
+**Summary of changes:**
+
+- `specs/api-endpoints.md`: new "Account Service DTOs (A3)" table after the A2 table: `PreferenceUpdateRequest` (preference, free-text String, optional) and `PreferenceResponse` (userId, preference, `null` when none is saved). A note covers D4, D5, the missing length limit (D3) and D6.
+- The TEXT/CLOB storage choice (D3) is an implementation detail and is recorded here only, not in the specs.
+- `domain-model.md`, `user-stories.md`, `architecture.md`, `requirements.md`, `cqrs.md` and `event-sourcing.md` are unchanged: they already define `Preference` (one optional String), the A3 endpoints, `PreferenceUpdated` and the owner access rule; `PreferenceUpdated` is not in the Kafka flows.
+- No implementation changes.
+
+**Files created/modified:**
+
+- `specs/api-endpoints.md`
+- `PROMPT_HISTORY.md`
