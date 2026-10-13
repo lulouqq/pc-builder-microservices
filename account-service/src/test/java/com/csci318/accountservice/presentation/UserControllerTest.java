@@ -1,8 +1,10 @@
 package com.csci318.accountservice.presentation;
 
+import com.csci318.accountservice.domain.Role;
 import com.csci318.accountservice.domain.User;
 import com.csci318.accountservice.domain.UserProfileUpdated;
 import com.csci318.accountservice.domain.UserRegistered;
+import com.csci318.accountservice.infrastructure.JwtTokenService;
 import com.csci318.accountservice.infrastructure.UserRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -10,8 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,6 +30,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 @Transactional
 @RecordApplicationEvents
@@ -44,6 +49,9 @@ class UserControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private JwtTokenService tokenService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -91,7 +99,7 @@ class UserControllerTest {
     void getUserReturnsRegisteredUser() throws Exception {
         String userId = register(VALID_REGISTRATION);
 
-        mockMvc.perform(get("/users/{userId}", userId))
+        mockMvc.perform(get("/users/{userId}", userId).header(HttpHeaders.AUTHORIZATION, bearer(userId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(userId))
                 .andExpect(jsonPath("$.username").value("alice"))
@@ -101,7 +109,8 @@ class UserControllerTest {
 
     @Test
     void getUnknownUserReturns404() throws Exception {
-        mockMvc.perform(get("/users/{userId}", "does-not-exist"))
+        mockMvc.perform(get("/users/{userId}", "does-not-exist")
+                        .header(HttpHeaders.AUTHORIZATION, bearer("does-not-exist")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ResourceNotFound"));
     }
@@ -151,7 +160,8 @@ class UserControllerTest {
     void updateProfileReturnsUpdatedUserAndPublishesUserProfileUpdated() throws Exception {
         String userId = register(VALID_REGISTRATION);
 
-        mockMvc.perform(put("/users/{userId}/profile", userId).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(put("/users/{userId}/profile", userId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId)).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"firstName": "Alicia", "lastName": "Jones"}
                                 """))
@@ -170,7 +180,7 @@ class UserControllerTest {
                     assertThat(event.lastName()).isEqualTo("Jones");
                 });
 
-        mockMvc.perform(get("/users/{userId}", userId))
+        mockMvc.perform(get("/users/{userId}", userId).header(HttpHeaders.AUTHORIZATION, bearer(userId)))
                 .andExpect(jsonPath("$.firstName").value("Alicia"))
                 .andExpect(jsonPath("$.lastName").value("Jones"));
     }
@@ -179,7 +189,8 @@ class UserControllerTest {
     void updateProfileReplacesWholeProfile() throws Exception {
         String userId = register(VALID_REGISTRATION);
 
-        mockMvc.perform(put("/users/{userId}/profile", userId).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(put("/users/{userId}/profile", userId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId)).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"firstName": "Alicia"}
                                 """))
@@ -192,7 +203,8 @@ class UserControllerTest {
     void updateProfileWithoutChangeDoesNotPublishUserProfileUpdated() throws Exception {
         String userId = register(VALID_REGISTRATION);
 
-        mockMvc.perform(put("/users/{userId}/profile", userId).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(put("/users/{userId}/profile", userId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId)).contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"firstName": "Alice", "lastName": "Smith"}
                                 """))
@@ -208,7 +220,9 @@ class UserControllerTest {
                 {"username": "bob", "email": "bob@example.com", "phone": "0400000000", "password": "secret123"}
                 """);
 
-        mockMvc.perform(put("/users/{userId}/profile", userId).contentType(MediaType.APPLICATION_JSON).content("{}"))
+        mockMvc.perform(put("/users/{userId}/profile", userId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
                 .andExpect(status().isOk());
 
         assertThat(events.stream(UserProfileUpdated.class)).isEmpty();
@@ -216,7 +230,9 @@ class UserControllerTest {
 
     @Test
     void updateProfileOfUnknownUserReturns404() throws Exception {
-        mockMvc.perform(put("/users/{userId}/profile", "does-not-exist").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(put("/users/{userId}/profile", "does-not-exist")
+                        .header(HttpHeaders.AUTHORIZATION, bearer("does-not-exist"))
+                        .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"firstName": "Alicia"}
                                 """))
@@ -230,5 +246,9 @@ class UserControllerTest {
                 .andReturn();
         JsonNode json = objectMapper.readTree(result.getResponse().getContentAsString());
         return json.get("id").asText();
+    }
+
+    private String bearer(String userId) {
+        return "Bearer " + tokenService.issue(userId, Role.CUSTOMER).token();
     }
 }

@@ -403,3 +403,196 @@ Already in place that A2 can reuse: BCrypt `PasswordEncoder` bean (`PasswordEnco
 **Files created/modified:**
 
 - `account-service/PROMPT_HISTORY.md` (this entry only)
+
+---
+
+## Prompt 8
+
+**Date:** 2026-10-12
+
+**Goal:** List the implementation plan for A2 based on the approved JWT/Spring Security design (Architecture Decision 11). Review only — no code or spec changes.
+
+**Exact user prompt:**
+
+````text
+Read CLAUDE.md, the relevant project specs, and account-service/PROMPT_HISTORY.md. Then shortly list the current implementation plan for A2 based on the approved JWT/Spring Security design. Do not write code or change any implementation/spec files. Append this prompt and your review to account-service/PROMPT_HISTORY.md.
+````
+
+**Basis:** `specs/architecture.md` Decision 11 (Resolved), `specs/api-endpoints.md` (Account Service DTOs (A2), Authentication and Authorisation, error contract), `specs/domain-model.md` 4.1 (`User.role`), `specs/user-stories.md` A2 (no domain events). Spring Boot 3.3.2, Java 21. Working tree clean; A1 complete, 35 tests passing.
+
+### Implementation plan (account-service only)
+
+1. **Dependencies (`account-service/pom.xml`):** add `spring-boot-starter-security` and `spring-boot-starter-oauth2-resource-server`. The resource-server starter brings Nimbus JOSE, which can both encode and decode HS256 JWTs. The explicit `spring-security-crypto` dependency then comes transitively and can be removed. Optional test dependency: `spring-security-test`.
+2. **Configuration (`application.yml`):**
+   - `security.jwt.secret`: a development default of at least 256 bits; must be the same in all services.
+   - Admin seed properties (username, password, email, phone) with development defaults.
+   - The 1-hour token lifetime as a constant or property.
+3. **Domain:**
+   - `Role` enum (`CUSTOMER`, `ADMIN`).
+   - `User.role` stored as a string column, `nullable = false`.
+   - `User.register(...)` always sets `CUSTOMER`; a separate factory creates the admin account.
+   - No new domain events (A2 has none); `UserRegistered` is unchanged.
+4. **Infrastructure:**
+   - `UserRepository.findByUsername`.
+   - `SecurityConfig` (`SecurityFilterChain`):
+     - stateless, no CSRF / form login / HTTP Basic;
+     - public: `POST /users`, `POST /auth/login`, `/h2-console/**` (frame options `sameOrigin`); everything else authenticated;
+     - `oauth2ResourceServer().jwt()` with an HS256 `NimbusJwtDecoder` using the shared secret, and a `JwtAuthenticationConverter` that maps the `role` claim to `ROLE_<role>`;
+     - an owner rule on `/users/{userId}` and `/users/{userId}/**`: the token `sub` must equal the `{userId}` path variable. Checking this in the filter chain gives 403 before the user is looked up (spec: 403 not 404), and an ADMIN gets no bypass.
+   - A `JwtEncoder` bean (`NimbusJwtEncoder` with the same secret).
+   - An `AuthenticationEntryPoint` and an `AccessDeniedHandler` that write the error contract JSON (`AuthenticationRequired` 401 / `AccessDenied` 403).
+   - An admin seeder (`ApplicationRunner`) that creates the ADMIN user from configuration if that username does not exist yet.
+5. **Service:**
+   - `AuthService.login`: blank username or password → `ValidationException` (400). Unknown username or failed `passwordEncoder.matches` → a new authentication-failed exception (401), with the same message for both.
+   - On success, a token is issued with `sub` = user id, `role`, `iat`, `exp` (+1 h).
+   - Returns the token, `expiresAt`, user id and role.
+6. **Presentation:**
+   - `AuthController` (`POST /auth/login` → 200).
+   - `LoginRequest` (username, password) and `AuthenticationResponse` (token, tokenType `Bearer`, expiresAt, userId, role) records.
+   - `GlobalExceptionHandler`: map the authentication-failed exception to 401 `AuthenticationRequired`. Its catch-all must not turn Spring Security exceptions into 500.
+7. **Tests:**
+   - Domain: a registered user is `CUSTOMER`; the admin factory gives `ADMIN`.
+   - Login:
+     - 200 with a decodable token (claims `sub`, `role`, about 1 h expiry);
+     - wrong password and unknown user both give 401 with the same message;
+     - missing fields → 400;
+     - the seeded admin logs in with role `ADMIN`.
+   - Security:
+     - no token, malformed token, expired token or wrong signature → 401 with an error contract body;
+     - another user's id (existing or not) → 403;
+     - an ADMIN token on another user's data → 403;
+     - `POST /users` stays public.
+   - Existing A1 tests (`UserControllerTest`, `AddressControllerTest`, `GlobalExceptionHandlerTest`, `DuplicateUsernameConstraintTest`) send a valid Bearer token, either from a login helper or minted with the `JwtEncoder` bean.
+8. **Docs:** update `account-service/README.md` (A2 endpoint, security notes), then the root `README.md` status, recorded in the root `PROMPT_HISTORY.md`.
+
+### Points to watch
+
+- `server.servlet.context-path: /api`: Spring Security matchers use paths *without* `/api` (e.g. `/auth/login`).
+- `GlobalExceptionHandlerTest` uses `@MockBean UserRepository`. The admin seeder runs at startup against the mock, so it must not depend on `save`'s return value. `DuplicateUsernameConstraintTest` stubs `existsByUsername` to false, so the seeder must not use that stubbed method. The local Java 26 / Mockito limitation (only interfaces can be mocked) still applies.
+- Do not expose `role` in `UserResponse`: the A1 DTOs are not defined in the specs, and the login response already carries it.
+
+### Out of scope for this task
+
+- Protecting endpoints in Catalog / Inventory / Order / Recommendation (each service adopts the same resource-server configuration in its own task). `catalog-service` C5 is still unprotected and `catalog-service/README.md` still describes Decision 11 as open.
+- A3 preferences (they will fall under the same owner rule automatically).
+- Refresh tokens, logout, lockout or rate limiting (not in the specs).
+
+**Files created/modified:**
+
+- `account-service/PROMPT_HISTORY.md` (this entry only)
+
+---
+
+## Prompt 9
+
+**Date:** 2026-10-12
+
+**Goal:** Implement A2 (Authenticate Customer) in account-service following the approved JWT/Spring Security design (Architecture Decision 11, Prompt 8 plan).
+
+**Exact user prompt:**
+
+````text
+Implement A2 just in account service. Follow the plan JWT/Spring Security plan. Add Role, admin seed, login, JWT generation/validation, 401/403, own-user access. Secrets (че зе секреты)/admin data through config/env, not hardcode. H2 console should stay okay. Update A1 tests for auth + add A2 tests. Update account-service/README.md and account-service/PROMPT_HISTORY.md. Run account tests and whole Maven build. Don't touch A3 and other services. No commit and push.
+````
+
+**Summary of changes:**
+
+- **Dependencies:** `spring-security-crypto` replaced by `spring-boot-starter-security` and `spring-boot-starter-oauth2-resource-server` (Nimbus JOSE for HS256 encode/decode; BCrypt is still included).
+- **Configuration:**
+  - `application.yml`: `security.jwt.secret: ${JWT_SECRET}` and `security.admin.password: ${ADMIN_PASSWORD}`, with **no defaults**. The service fails at startup if either is missing; the JWT secret must be at least 32 bytes.
+  - `security.admin.username` / `email` / `phone` come from `ADMIN_USERNAME` / `ADMIN_EMAIL` / `ADMIN_PHONE`, with non-secret defaults.
+  - Test-only values in `src/test/resources/application-test.yml` (`test` profile).
+- **Domain:** `Role` enum (`CUSTOMER`, `ADMIN`). `User.role` is stored as a string, not null. `User.register` always creates a `CUSTOMER`; the new `User.registerAdmin` creates an `ADMIN`. Both raise `UserRegistered` as before. No new domain events.
+- **Infrastructure:**
+  - `UserRepository.findByUsername`.
+  - `JwtConfig`: HS256 secret key, `NimbusJwtEncoder` and `NimbusJwtDecoder`.
+  - `JwtTokenService`: issues tokens with `sub`, `role`, `iat`, `exp` = +1 h.
+  - `SecurityConfig`:
+    - stateless; CSRF, form login and HTTP Basic disabled; frame options `sameOrigin` for the H2 console;
+    - public: the ERROR dispatch, the H2 console, `POST /users`, `POST /auth/login`;
+    - `/users/{userId}/**` (also matches `/users/{userId}`) only when the token's `sub` equals `{userId}`; anything else needs authentication;
+    - the `role` claim is mapped to `ROLE_*`.
+  - `AdminAccountInitializer` (`ApplicationRunner`): creates the admin from configuration if the username does not exist (logs a warning if it belongs to a non-admin).
+  - `PasswordEncoderConfig`: javadoc updated.
+- **Service:** `AuthService.login`:
+  - blank username or password → 400 `ValidationFailed`;
+  - unknown user or wrong password → new `AuthenticationFailedException`, with the same message ("Invalid username or password");
+  - returns an `AuthenticationResult`.
+- **Presentation:**
+  - `AuthController` (`POST /auth/login` → 200); `LoginRequest`; `AuthenticationResponse` (token, tokenType `Bearer`, expiresAt, userId, role).
+  - `SecurityErrorHandler`: entry point and access-denied handler that write error-contract JSON — 401 `AuthenticationRequired` with `WWW-Authenticate: Bearer`, 403 `AccessDenied`.
+  - `GlobalExceptionHandler`: `AuthenticationFailedException` → 401 `AuthenticationRequired`. The catch-all rethrows Spring Security exceptions instead of returning 500.
+- **Tests (56, all passing):**
+  - Existing A1 tests: `@ActiveProfiles("test")`, and requests to `/users/{userId}/...` send a Bearer token for that user (`JwtTokenService`). The unknown-user 404 tests use a token for the unknown id.
+  - `UserTest` (+2): roles.
+  - `JwtConfigTest` (new, 2): secret length check.
+  - `AuthControllerTest` (new, 8):
+    - login → 200 with a token whose `sub`, `role` and 1 h expiry are checked by decoding, and `expiresAt` equals `exp`;
+    - the login token opens the user's own account;
+    - wrong password and unknown username → 401 with the same message;
+    - missing, blank or malformed credentials → 400;
+    - the seeded admin logs in with `ADMIN`; the admin is not created twice;
+    - a `role` sent to `POST /users` is ignored (`CUSTOMER`).
+  - `AccessControlTest` (new, 9):
+    - all six A1 endpoints without a token → 401 with error body and `WWW-Authenticate`;
+    - malformed, expired or foreign-signed token, or Basic auth → 401;
+    - another user's endpoints → 403, and the data is unchanged;
+    - another user's token on an unknown id → 403, not 404;
+    - an ADMIN token does not bypass the own-user check;
+    - registration and login stay public.
+- **Manual check with the packaged jar:**
+  - Without `JWT_SECRET` the service refuses to start ("Could not resolve placeholder 'JWT_SECRET'").
+  - With env vars: admin created at startup; `/api/h2-console/` → 200 with `X-Frame-Options: SAMEORIGIN` and no token needed.
+  - Login, own access 200, no token 401, other user 403; unknown path with a token → 404, `DELETE /users/{id}` → 405 (the ERROR dispatch still works).
+- **Test results:**
+  - `./mvnw test -pl account-service` → 56 tests, 0 failures.
+  - `./mvnw test` (full build) → BUILD SUCCESS (catalog-service 46, account-service 56).
+  - The ERROR log line during the run comes from the deliberate 500 test.
+- `account-service/README.md`: A2 endpoint, authentication rules, environment variable table, run command with env vars.
+
+**Assumptions:**
+
+- No defaults for secrets (JWT secret, admin password); non-secret admin fields have defaults. The secret is used as raw UTF-8 bytes (at least 32).
+- A request without a token to any non-public path (including unknown paths) returns 401 rather than 404.
+- `role` is not added to `UserResponse` (the A1 DTOs are not defined in the specs; the login response carries it).
+- Only one token lifetime (1 hour, a constant in `JwtTokenService`); the spec fixes it.
+
+**Not done / open:**
+
+- Other services do not validate tokens yet (catalog-service C5 is still unprotected; `catalog-service/README.md` still calls Decision 11 open). Each needs the same resource-server configuration and the same `JWT_SECRET`.
+- Root `README.md` still lists account-service as "A1 complete; A2, A3 pending" (root change, not requested here).
+- Login timing differs slightly between an unknown username (no BCrypt check) and a wrong password; not addressed (no requirement).
+- A3 preferences not implemented; they will fall under the same `/users/{userId}/**` rule.
+
+**Files created/modified:**
+
+- `account-service/pom.xml`
+- `account-service/src/main/resources/application.yml`
+- `account-service/src/main/java/com/csci318/accountservice/domain/Role.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/domain/User.java`
+- `account-service/src/main/java/com/csci318/accountservice/infrastructure/UserRepository.java`
+- `account-service/src/main/java/com/csci318/accountservice/infrastructure/PasswordEncoderConfig.java`
+- `account-service/src/main/java/com/csci318/accountservice/infrastructure/JwtConfig.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/infrastructure/JwtTokenService.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/infrastructure/SecurityConfig.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/infrastructure/AdminAccountInitializer.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/service/AuthService.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/service/AuthenticationResult.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/service/AuthenticationFailedException.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/presentation/AuthController.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/presentation/LoginRequest.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/presentation/AuthenticationResponse.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/presentation/SecurityErrorHandler.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/presentation/GlobalExceptionHandler.java`
+- `account-service/src/test/resources/application-test.yml` (new)
+- `account-service/src/test/java/com/csci318/accountservice/AccountServiceApplicationTests.java`
+- `account-service/src/test/java/com/csci318/accountservice/domain/UserTest.java`
+- `account-service/src/test/java/com/csci318/accountservice/infrastructure/JwtConfigTest.java` (new)
+- `account-service/src/test/java/com/csci318/accountservice/presentation/UserControllerTest.java`
+- `account-service/src/test/java/com/csci318/accountservice/presentation/AddressControllerTest.java`
+- `account-service/src/test/java/com/csci318/accountservice/presentation/GlobalExceptionHandlerTest.java`
+- `account-service/src/test/java/com/csci318/accountservice/presentation/DuplicateUsernameConstraintTest.java`
+- `account-service/src/test/java/com/csci318/accountservice/presentation/AuthControllerTest.java` (new)
+- `account-service/src/test/java/com/csci318/accountservice/presentation/AccessControlTest.java` (new)
+- `account-service/README.md`
+- `account-service/PROMPT_HISTORY.md`

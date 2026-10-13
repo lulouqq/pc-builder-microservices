@@ -1,0 +1,7 @@
+# Test-only values for the secrets that the main application.yml reads from environment variables.
+security:
+  jwt:
+    secret: test-only-jwt-secret-not-for-production-use
+  admin:
+    username: admin
+    password: test-admin-password

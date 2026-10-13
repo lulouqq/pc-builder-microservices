@@ -4,6 +4,8 @@ import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
@@ -41,6 +43,10 @@ public class User extends AbstractAggregateRoot<User> {
     @Column(nullable = false)
     private String passwordHash;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private Role role;
+
     @Embedded
     private UserProfile profile;
 
@@ -52,25 +58,39 @@ public class User extends AbstractAggregateRoot<User> {
         // for JPA
     }
 
-    private User(String id, String username, String email, String phone, String passwordHash, UserProfile profile) {
+    private User(String id, String username, String email, String phone, String passwordHash, Role role,
+                 UserProfile profile) {
         this.id = id;
         this.username = username;
         this.email = email;
         this.phone = phone;
         this.passwordHash = passwordHash;
+        this.role = role;
         this.profile = profile;
     }
 
     /**
-     * Registers a new user. The password must already be hashed; the plain password is never stored.
+     * Registers a new customer. The password must already be hashed; the plain password is never stored.
      */
     public static User register(String username, String email, String phone, String passwordHash, UserProfile profile) {
+        return create(username, email, phone, passwordHash, Role.CUSTOMER, profile);
+    }
+
+    /**
+     * Creates the administrator account (seeded from configuration at startup, never through the API).
+     */
+    public static User registerAdmin(String username, String email, String phone, String passwordHash) {
+        return create(username, email, phone, passwordHash, Role.ADMIN, null);
+    }
+
+    private static User create(String username, String email, String phone, String passwordHash, Role role,
+                               UserProfile profile) {
         requireText(username, "username");
         requireText(email, "email");
         requireText(phone, "phone");
         requireText(passwordHash, "passwordHash");
 
-        User user = new User(UUID.randomUUID().toString(), username, email, phone, passwordHash, profile);
+        User user = new User(UUID.randomUUID().toString(), username, email, phone, passwordHash, role, profile);
         user.registerEvent(new UserRegistered(user.id, user.username, Instant.now()));
         return user;
     }
@@ -140,6 +160,10 @@ public class User extends AbstractAggregateRoot<User> {
 
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public Role getRole() {
+        return role;
     }
 
     public UserProfile getProfile() {
