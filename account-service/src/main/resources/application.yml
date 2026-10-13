@@ -19,3 +19,15 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+
+# A2 authentication (specs/api-endpoints.md "Authentication and Authorisation").
+# Secrets come from environment variables and have no defaults: JWT_SECRET (at least 32 bytes,
+# same value in every service) and ADMIN_PASSWORD must be set before starting the service.
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+  admin:
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD}
+    email: ${ADMIN_EMAIL:admin@pcbuilder.local}
+    phone: ${ADMIN_PHONE:0000000000}

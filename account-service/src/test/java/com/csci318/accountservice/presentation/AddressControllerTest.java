@@ -1,12 +1,16 @@
 package com.csci318.accountservice.presentation;
 
+import com.csci318.accountservice.domain.Role;
+import com.csci318.accountservice.infrastructure.JwtTokenService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
+@ActiveProfiles("test")
 @AutoConfigureMockMvc
 @Transactional
 class AddressControllerTest {
@@ -50,6 +55,9 @@ class AddressControllerTest {
     private MockMvc mockMvc;
 
     @Autowired
+    private JwtTokenService tokenService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @Autowired
@@ -59,7 +67,8 @@ class AddressControllerTest {
     void addAddressReturnsCreatedAddress() throws Exception {
         String userId = registerUser("alice");
 
-        mockMvc.perform(post("/users/{userId}/addresses", userId).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/users/{userId}/addresses", userId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId)).contentType(MediaType.APPLICATION_JSON)
                         .content(ADDRESS))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").isNotEmpty())
@@ -78,7 +87,7 @@ class AddressControllerTest {
         entityManager.flush();
         entityManager.clear();
 
-        mockMvc.perform(get("/users/{userId}/addresses", userId))
+        mockMvc.perform(get("/users/{userId}/addresses", userId).header(HttpHeaders.AUTHORIZATION, bearer(userId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].id").value(addressId))
@@ -90,7 +99,7 @@ class AddressControllerTest {
     void getAddressesOfUserWithoutAddressesReturnsEmptyArray() throws Exception {
         String userId = registerUser("alice");
 
-        mockMvc.perform(get("/users/{userId}/addresses", userId))
+        mockMvc.perform(get("/users/{userId}/addresses", userId).header(HttpHeaders.AUTHORIZATION, bearer(userId)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
     }
@@ -101,6 +110,7 @@ class AddressControllerTest {
         String addressId = addAddress(userId, ADDRESS);
 
         mockMvc.perform(put("/users/{userId}/addresses/{addressId}", userId, addressId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId))
                         .contentType(MediaType.APPLICATION_JSON).content(UPDATED_ADDRESS))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(addressId))
@@ -111,7 +121,7 @@ class AddressControllerTest {
         entityManager.flush();
         entityManager.clear();
 
-        mockMvc.perform(get("/users/{userId}/addresses", userId))
+        mockMvc.perform(get("/users/{userId}/addresses", userId).header(HttpHeaders.AUTHORIZATION, bearer(userId)))
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].streetName").value("High St"));
     }
@@ -121,12 +131,13 @@ class AddressControllerTest {
         String userId = registerUser("alice");
         String addressId = addAddress(userId, ADDRESS);
 
-        mockMvc.perform(delete("/users/{userId}/addresses/{addressId}", userId, addressId))
+        mockMvc.perform(delete("/users/{userId}/addresses/{addressId}", userId, addressId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId)))
                 .andExpect(status().isNoContent());
         entityManager.flush();
         entityManager.clear();
 
-        mockMvc.perform(get("/users/{userId}/addresses", userId))
+        mockMvc.perform(get("/users/{userId}/addresses", userId).header(HttpHeaders.AUTHORIZATION, bearer(userId)))
                 .andExpect(jsonPath("$", hasSize(0)));
     }
 
@@ -137,7 +148,8 @@ class AddressControllerTest {
                 {"streetNo": 1, "streetName": "Main St", "suburb": "Wollongong", "city": "Wollongong", "state": "NSW"}
                 """;
 
-        mockMvc.perform(post("/users/{userId}/addresses", userId).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/users/{userId}/addresses", userId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId)).contentType(MediaType.APPLICATION_JSON)
                         .content(missingPostCode))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ValidationFailed"))
@@ -149,7 +161,8 @@ class AddressControllerTest {
         String userId = registerUser("alice");
         String badPostCode = ADDRESS.replace("2500", "\"abc\"");
 
-        mockMvc.perform(post("/users/{userId}/addresses", userId).contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/users/{userId}/addresses", userId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId)).contentType(MediaType.APPLICATION_JSON)
                         .content(badPostCode))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ValidationFailed"));
@@ -162,6 +175,7 @@ class AddressControllerTest {
         String missingCity = UPDATED_ADDRESS.replace("\"city\": \"Wollongong\",", "");
 
         mockMvc.perform(put("/users/{userId}/addresses/{addressId}", userId, addressId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId))
                         .contentType(MediaType.APPLICATION_JSON).content(missingCity))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("ValidationFailed"))
@@ -170,10 +184,13 @@ class AddressControllerTest {
 
     @Test
     void addressEndpointsOfUnknownUserReturn404() throws Exception {
-        mockMvc.perform(get("/users/{userId}/addresses", "does-not-exist"))
+        mockMvc.perform(get("/users/{userId}/addresses", "does-not-exist")
+                        .header(HttpHeaders.AUTHORIZATION, bearer("does-not-exist")))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ResourceNotFound"));
-        mockMvc.perform(post("/users/{userId}/addresses", "does-not-exist").contentType(MediaType.APPLICATION_JSON)
+        mockMvc.perform(post("/users/{userId}/addresses", "does-not-exist")
+                        .header(HttpHeaders.AUTHORIZATION, bearer("does-not-exist"))
+                        .contentType(MediaType.APPLICATION_JSON)
                         .content(ADDRESS))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ResourceNotFound"));
@@ -184,10 +201,12 @@ class AddressControllerTest {
         String userId = registerUser("alice");
 
         mockMvc.perform(put("/users/{userId}/addresses/{addressId}", userId, "does-not-exist")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId))
                         .contentType(MediaType.APPLICATION_JSON).content(UPDATED_ADDRESS))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ResourceNotFound"));
-        mockMvc.perform(delete("/users/{userId}/addresses/{addressId}", userId, "does-not-exist"))
+        mockMvc.perform(delete("/users/{userId}/addresses/{addressId}", userId, "does-not-exist")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("ResourceNotFound"));
     }
@@ -199,12 +218,14 @@ class AddressControllerTest {
         String aliceAddressId = addAddress(aliceId, ADDRESS);
 
         mockMvc.perform(put("/users/{userId}/addresses/{addressId}", bobId, aliceAddressId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(bobId))
                         .contentType(MediaType.APPLICATION_JSON).content(UPDATED_ADDRESS))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(delete("/users/{userId}/addresses/{addressId}", bobId, aliceAddressId))
+        mockMvc.perform(delete("/users/{userId}/addresses/{addressId}", bobId, aliceAddressId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(bobId)))
                 .andExpect(status().isNotFound());
 
-        mockMvc.perform(get("/users/{userId}/addresses", aliceId))
+        mockMvc.perform(get("/users/{userId}/addresses", aliceId).header(HttpHeaders.AUTHORIZATION, bearer(aliceId)))
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].streetName").value("Main St"));
     }
@@ -220,6 +241,7 @@ class AddressControllerTest {
 
     private String addAddress(String userId, String body) throws Exception {
         return idOf(mockMvc.perform(post("/users/{userId}/addresses", userId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(userId))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isCreated())
                 .andReturn());
@@ -227,5 +249,9 @@ class AddressControllerTest {
 
     private String idOf(MvcResult result) throws Exception {
         return objectMapper.readTree(result.getResponse().getContentAsString()).get("id").asText();
+    }
+
+    private String bearer(String userId) {
+        return "Bearer " + tokenService.issue(userId, Role.CUSTOMER).token();
     }
 }

@@ -6,7 +6,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
- * BCrypt password hashing (spring-security-crypto only; Spring Security itself is not used).
+ * BCrypt password hashing for stored passwords and login (A2).
  */
 @Configuration
 public class PasswordEncoderConfig {

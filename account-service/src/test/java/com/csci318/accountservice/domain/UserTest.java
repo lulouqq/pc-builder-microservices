@@ -95,4 +95,20 @@ class UserTest {
         assertThat(address.getStreetNo()).isEqualTo(1);
         assertThat(address.getSuburb()).isEqualTo("Wollongong");
     }
+
+    @Test
+    void registeredUserIsCustomer() {
+        User user = User.register("alice", "alice@example.com", "0400000000", "hash", null);
+
+        assertThat(user.getRole()).isEqualTo(Role.CUSTOMER);
+    }
+
+    @Test
+    void registerAdminCreatesAdmin() {
+        User admin = User.registerAdmin("admin", "admin@example.com", "0400000000", "hash");
+
+        assertThat(admin.getId()).isNotBlank();
+        assertThat(admin.getRole()).isEqualTo(Role.ADMIN);
+        assertThat(admin.getProfile()).isNull();
+    }
 }
