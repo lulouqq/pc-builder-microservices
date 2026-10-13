@@ -596,3 +596,110 @@ Implement A2 just in account service. Follow the plan JWT/Spring Security plan. 
 - `account-service/src/test/java/com/csci318/accountservice/presentation/AccessControlTest.java` (new)
 - `account-service/README.md`
 - `account-service/PROMPT_HISTORY.md`
+
+---
+
+## Prompt 10
+
+**Date:** 2026-10-13
+
+**Goal:** List the next steps for A3 (Save Recommendation Preferences) and point out everything the specs leave undefined that needs a decision before implementation. Review only — no implementation or spec changes.
+
+**Exact user prompt:**
+
+````text
+First read CLAUDE.md, the relevant project specs, account-service/README.md and account-service/PROMPT_HISTORY.md. Then list the next steps for A3 implementation and point out anything that is not defined by the specs and needs a decision before implementation. Do not change any implementation or spec files. Only append this prompt and your review to account-service/PROMPT_HISTORY.md.
+````
+
+**Specs read:** `user-stories.md` (A3 story and scenario, story mapping, endpoint mapping), `api-endpoints.md` (Account Service endpoints, Authentication and Authorisation, error contract), `domain-model.md` (class table, 4.1 User, 4.3 Preference, 5.1 BuildRequest), `requirements.md` (FR-17, NFR-03, NFR-04), `architecture.md` (REST calls, Kafka flows, Decision 11). `cqrs.md` and `event-sourcing.md` cover Inventory only.
+
+**State at review time:** branch `feature/account-service`, working tree clean, A1 and A2 complete and committed (`559f417`). `./mvnw test -pl account-service` → 56 tests, 0 failures. `recommendation-service` is still a README/PROMPT_HISTORY placeholder.
+
+### What the specs define for A3
+
+| Source | Requirement |
+|---|---|
+| user-stories.md A3 | "As a Customer, I want to save my PC preferences, so that they can be used when generating personalised PC build recommendations." Scenario: (1) customer enters or updates preferences; (2) Account Service stores them; (3) Recommendation Service can retrieve them when generating a build. |
+| user-stories.md mapping | Domain classes: `User`, `Preference`. Domain event: `PreferenceUpdated`. Endpoints: `GET`, `PUT /users/{userId}/preferences`. |
+| api-endpoints.md | `GET /users/{userId}/preferences` → 200 `PreferenceResponse`; `PUT /users/{userId}/preferences` (`PreferenceUpdateRequest`) → 200 `PreferenceResponse` ("Save or update"). |
+| api-endpoints.md auth | Both endpoints are Customer (owner): token `sub` must equal `{userId}`, checked before lookup (403, not 404); ADMIN does not bypass. Recommendation → Account calls for preferences forward the customer's `Authorization` header. |
+| domain-model.md 4.3 | `Preference` is a **Value Object** with one field: `preference` (String, Optional). Association User 1 — 0..1 Preference. |
+| requirements.md | FR-17 (Account, Recommendation): customers save preferences used by the recommendation service. |
+| architecture.md | Recommendation Service → Account Service is a synchronous REST call. `PreferenceUpdated` is not in the Kafka flows, so it is an internal domain event (like `UserRegistered` / `UserProfileUpdated`). |
+
+Already in place: `SecurityConfig`'s `/users/{userId}/**` owner rule already covers `/users/{userId}/preferences` (no security change needed); `User` aggregate with `AbstractAggregateRoot` events; `UserService` / `UserController` patterns from A1; error contract handlers.
+
+### Next steps (account-service only)
+
+1. **Domain:**
+   - `Preference` value object: `@Embeddable` record with one field `preference` (column `preference` on `users`), like `UserProfile`.
+   - `User.preference` field and `User.updatePreference(Preference)`; raises the new internal `PreferenceUpdated` domain event (payload e.g. `userId`, `preference`, `occurredAt`).
+   - Handle Hibernate loading an all-null embeddable as `null` (same as `getProfileOrEmpty`).
+2. **Service:** `UserService.getPreference(userId)` and `updatePreference(...)` (or an `UpdatePreferenceCommand`, following `UpdateProfileCommand`); 404 `ResourceNotFound` for an unknown user; call `userRepository.save(...)` so the event is published.
+3. **Presentation:** `PreferenceUpdateRequest`, `PreferenceResponse`, and `GET` / `PUT /users/{userId}/preferences` (in `UserController` or a small `PreferenceController`, like `AddressController`).
+4. **Tests:**
+   - `UserTest`: set, replace, clear; event raised / not raised.
+   - MockMvc (new `PreferenceControllerTest`): GET before anything is saved, PUT → 200 and GET returns the saved value (after flush + clear), `PreferenceUpdated` published once, unknown user → 404 (token for the unknown id), malformed body → 400, plus whatever the decisions below require (too long, blank).
+   - `AccessControlTest`: both endpoints without token → 401; another user's id → 403 and the preference unchanged; ADMIN token on another user → 403.
+5. **Docs:** `account-service/README.md` (A3 rows in the Implemented table, semantics, remove "Not yet implemented: preferences"); root `README.md` status → A1–A3 complete (recorded in root `PROMPT_HISTORY.md`); this file.
+6. **Spec (only if the team agrees, as a separate request):** add an "Account Service DTOs (A3)" table to `api-endpoints.md`, as was done for A2, once the decisions below are made.
+
+### Not defined by the specs — decisions needed before implementation
+
+| # | Open point | Suggested default |
+|---|---|---|
+| D1 | **`PreferenceUpdateRequest` / `PreferenceResponse` fields.** No Account DTO table for A3 (only A2 has one). Naming also differs: domain field `preference` (singular), endpoint `/preferences`, `BuildRequest.preferences`. | Request `{ "preference": String }`; response `{ "userId", "preference" }`. Use the domain-model name `preference`. |
+| D2 | **Shape of the preference.** Spec says one free-text String; "PC preferences" could suggest structured fields (brands, budget, use). | Keep one free-text String as in domain-model 4.3; structured fields would be a spec change. |
+| D3 | **Maximum length.** Not defined. JPA's default `varchar(255)` would make a longer value fail in the database, and the current catch-all would then return 500 instead of 400. | Pick a limit (e.g. 1000 characters) as `@Column(length)` and validate it in the domain → 400 `ValidationFailed`. |
+| D4 | **`GET` when nothing has been saved yet** (User 1 — 0..1 Preference). 200 with an empty value, or 404? | 200 with `preference: null` for an existing user; 404 only for an unknown user. Simpler for Recommendation Service. |
+| D5 | **`PUT` with a missing / null / blank `preference`.** Field is Optional and there is no `DELETE` endpoint. | Full replacement like `PUT /profile`: missing or null clears it; blank treated as cleared (stored as null). Alternatively reject blank with 400. |
+| D6 | **When `PreferenceUpdated` is raised and its payload.** Spec only names the event. | Raise only when the value actually changes (same rule as `UserProfileUpdated`, Prompt 6); payload `userId`, `preference`, `occurredAt`; internal only, not Kafka. |
+| D7 | **Should `UserResponse` include the preference?** Not defined. | No — it has its own endpoint (same as addresses). |
+| D8 | **How Recommendation Service uses it** (R1): whether the saved preference is combined with or replaced by `BuildRequest.preferences` from the request body, and what happens if Account Service is unavailable (NFR-03). | Out of scope for account-service; record for the recommendation-service task. Account Service only needs D1/D4 to be stable so the consumer can rely on them. |
+
+### Notes
+
+- No security change is needed: the existing owner rule covers the new path, and `GET`/`PUT /users/{userId}/preferences` are already listed under Customer (owner) in the spec. A Recommendation → Account call works only with the customer's forwarded token, which matches the spec.
+- No Kafka, no new library and no new aggregate: `Preference` is a value object inside the `User` aggregate.
+- Pre-existing, not A3-specific: other `String` fields (e.g. address fields) longer than 255 characters would also hit the database limit and return 500 instead of 400. Not fixed here; it can be handled together with D3 if wanted.
+
+**Files created/modified:**
+
+- `account-service/PROMPT_HISTORY.md` (this entry only)
+
+---
+
+## Prompt 11
+
+**Date:** 2026-10-13
+
+**Goal:** Record the team's decisions on the open A3 points (D1–D8 from Prompt 10) before implementation. No implementation or spec changes.
+
+**Exact user prompt:**
+
+````text
+For D1: request { "preference": "..." }, response { "userId": "...", "preference": "..." }. D2: leave it as one free-text string following domain model. Don't create any structured preferences for now. D3: Since specs are not considering maximum length, for now leave it without validation. D4: 200 and "preference": null. D5: null, missing and blank if put then clear preference. D6: PreferenceUpdated only if value was changed; internal event, not Kafka. D7: preferences are not added to the usual UserResponse. D8: leave the Recommendation Service integration for later; it belongs to the next service implementation.
+````
+
+**Decisions for A3:**
+
+| # | Decision |
+|---|---|
+| D1 | `PreferenceUpdateRequest` = `{ "preference": String }`; `PreferenceResponse` = `{ "userId", "preference" }`. |
+| D2 | `Preference` stays one free-text String (domain-model.md 4.3). No structured preference fields. |
+| D3 | No maximum-length validation (the specs define none). |
+| D4 | `GET /users/{userId}/preferences` for an existing user with no saved preference → 200 with `"preference": null`. Unknown user → 404 `ResourceNotFound`. |
+| D5 | `PUT` with `preference` null, missing or blank clears the saved preference. |
+| D6 | `PreferenceUpdated` is raised only when the value actually changes; internal domain event, not Kafka. |
+| D7 | The preference is not added to `UserResponse`. |
+| D8 | Recommendation Service integration is deferred to the recommendation-service implementation. |
+
+**Notes:**
+
+- D3 consequence: without a length limit or validation, a value longer than the column length (JPA default `varchar(255)`) is expected to be rejected by the database and returned as 500 `InternalServiceError` by the current catch-all (not verified by a test).
+- D5: "blank" is stored as null, so clearing an already empty preference raises no `PreferenceUpdated` (D6).
+- `specs/api-endpoints.md` has no A3 DTO table; D1 is recorded here only. Adding it to the specs needs a separate request.
+
+**Files created/modified:**
+
+- `account-service/PROMPT_HISTORY.md` (this entry only)
