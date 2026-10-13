@@ -703,3 +703,58 @@ For D1: request { "preference": "..." }, response { "userId": "...", "preference
 **Files created/modified:**
 
 - `account-service/PROMPT_HISTORY.md` (this entry only)
+
+---
+
+## Prompt 12
+
+**Date:** 2026-10-13
+
+**Goal:** Implement A3 (Save Recommendation Preferences) in account-service following the decisions in Prompt 11 and root `PROMPT_HISTORY.md` Prompt 19 (D3 revised: CLOB, no length validation).
+
+**Exact user prompt:**
+
+````text
+Now implementing A3 only. Preference value object. Store free-text as TEXT/CLOB, without fake max-length validation. GET /users/{userId}/preferences. PUT /users/{userId}/preferences. null / missing / blank should clear the preference. GET before any preference is saved is 200 + preference: null. PreferenceUpdated only if the value actually changes. Event internal only, not Kafka. Use already existing JWT own-user security. Do not add preference to the usual UserResponse. Do not touch Recommendation Service. Add/update tests. Update account-service/README.md and account-service/PROMPT_HISTORY.md. Run account tests + full Maven build. Don't commit or push.
+````
+
+**Summary of changes:**
+
+- **Domain:**
+  - `Preference` value object: `@Embeddable` record with one field `preference` (`@Lob` → H2 column `preference clob`, no length limit). Its constructor turns a blank value into `null`, so blank and "no preference" are equal.
+  - `User.preference` (embedded) and `User.updatePreference(Preference)`: replaces the preference (`null` clears it) and registers the internal `PreferenceUpdated(userId, preference, occurredAt)` event **only when the value changes**. `User.getPreference()` never returns null (Hibernate loads an all-null embeddable as null; same handling as the profile).
+- **Service:** `UserService.updatePreference(userId, UpdatePreferenceCommand)` calls `save` so the event is published; 404 for an unknown user (via `getUser`). New `UpdatePreferenceCommand`.
+- **Presentation:** new `PreferenceController` (`/users/{userId}/preferences`): `GET` → 200 `PreferenceResponse`, `PUT` → 200 `PreferenceResponse`. New `PreferenceUpdateRequest` (`preference`) and `PreferenceResponse` (`userId`, `preference`; `null` is serialised as `"preference": null`). `UserResponse` is unchanged.
+- **Security:** no change. The existing `/users/{userId}/**` owner rule in `SecurityConfig` covers the new endpoints.
+- **Tests (68, all passing; +12):**
+  - `UserTest` (+2): set / replace / blank clears / null clears; blank equals no preference.
+  - `PreferenceControllerTest` (new, 10): GET before saving → 200 with `preference: null` (key present); PUT saves (read back after flush + clear) and publishes one `PreferenceUpdated`; replace → second event; 16 000-character value stored and read back; same value → no event; `{}`, `null` and blank each clear it (one event per clear); clearing when nothing is saved → no event; preference not in `GET /users/{userId}`; unknown user → 404 for GET and PUT; malformed body → 400.
+  - `AccessControlTest`: `GET`/`PUT /users/{userId}/preferences` added to the protected-endpoint list, so the existing tests now also check 401 without a token and 403 for another user's token; the other user's preference stays `null`.
+- **Test results:** `./mvnw test -pl account-service` → 68 tests, 0 failures. `./mvnw test` (full build) → BUILD SUCCESS (catalog-service 46, account-service 68). The ERROR log lines come from the deliberate 500 and unique-constraint tests.
+- `account-service/README.md`: A3 rows in the Implemented table, preference semantics, `PreferenceUpdated` in the events note, preferences mentioned under the owner rule; the "Not yet implemented: preferences (A3)" line removed.
+
+**Assumptions:**
+
+- A non-blank preference is stored exactly as sent (not trimmed); only an entirely blank value is treated as cleared.
+- `PreferenceUpdated` carries `userId`, the new `preference` (`null` when cleared) and `occurredAt`.
+
+**Not done / open:**
+
+- Root `README.md` still lists account-service as "in progress (A1, A2 complete; A3 pending)" (root change, not requested here; it would be recorded in the root `PROMPT_HISTORY.md`).
+- Recommendation Service integration (reading preferences for R1) is deferred to the recommendation-service implementation, as decided (D8).
+
+**Files created/modified:**
+
+- `account-service/src/main/java/com/csci318/accountservice/domain/Preference.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/domain/PreferenceUpdated.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/domain/User.java`
+- `account-service/src/main/java/com/csci318/accountservice/service/UpdatePreferenceCommand.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/service/UserService.java`
+- `account-service/src/main/java/com/csci318/accountservice/presentation/PreferenceController.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/presentation/PreferenceUpdateRequest.java` (new)
+- `account-service/src/main/java/com/csci318/accountservice/presentation/PreferenceResponse.java` (new)
+- `account-service/src/test/java/com/csci318/accountservice/domain/UserTest.java`
+- `account-service/src/test/java/com/csci318/accountservice/presentation/PreferenceControllerTest.java` (new)
+- `account-service/src/test/java/com/csci318/accountservice/presentation/AccessControlTest.java`
+- `account-service/README.md`
+- `account-service/PROMPT_HISTORY.md`

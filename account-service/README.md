@@ -1,6 +1,6 @@
 # account-service
 
-In progress. Responsibilities: users, profiles, addresses, preferences (user stories A1–A3).
+A1–A3 implemented. Responsibilities: users, profiles, addresses, preferences (user stories A1–A3).
 
 Port: 8084, base path `/api`.
 
@@ -16,11 +16,14 @@ Port: 8084, base path `/api`.
 | A1 | PUT | `/users/{userId}/addresses/{addressId}` | 200 OK (`AddressResponse`) |
 | A1 | DELETE | `/users/{userId}/addresses/{addressId}` | 204 No Content |
 | A2 | POST | `/auth/login` | 200 OK (`AuthenticationResponse`) |
+| A3 | GET | `/users/{userId}/preferences` | 200 OK (`PreferenceResponse`) |
+| A3 | PUT | `/users/{userId}/preferences` | 200 OK (`PreferenceResponse`) |
 
 - Passwords are hashed with BCrypt; the plain password and the hash are never returned.
 - `PUT /users/{userId}/profile` replaces the whole profile (`firstName`, `lastName`, both optional; a missing field is cleared). Email, phone and password are not changed by it.
 - Addresses belong to the `User` aggregate. All address fields are required (`streetNo` and `postCode` are integers); `PUT` replaces the whole address.
-- `UserRegistered` and `UserProfileUpdated` are internal domain events (published in-process by Spring Data on save), not Kafka events. `UserProfileUpdated` is raised only when the profile actually changes.
+- Preferences (A3): `PUT` takes `{"preference"}` (one free-text string) and replaces the saved preference; a missing, `null` or blank `preference` clears it. Both endpoints return `{"userId", "preference"}`; `preference` is `null` when nothing is saved. It is stored as a CLOB with no length limit and is not part of `UserResponse`.
+- `UserRegistered`, `UserProfileUpdated` and `PreferenceUpdated` are internal domain events (published in-process by Spring Data on save), not Kafka events. `UserProfileUpdated` and `PreferenceUpdated` are raised only when the profile or preference actually changes.
 - Errors: `ValidationFailed` (400) for missing required fields, a duplicate username or a malformed body; `AuthenticationRequired` (401) and `AccessDenied` (403), see below; `ResourceNotFound` (404) for an unknown user, or an address that does not exist or belongs to another user; `InternalServiceError` (500) for unexpected failures.
 
 ## Authentication (A2)
@@ -29,7 +32,7 @@ Design: `specs/api-endpoints.md` "Authentication and Authorisation" and `specs/a
 
 - `POST /auth/login` with `{"username", "password"}` returns `{"token", "tokenType": "Bearer", "expiresAt", "userId", "role"}`. The token is an HS256 JWT with the claims `sub` (user id), `role` (`CUSTOMER` / `ADMIN`), `iat` and `exp`. It is valid for 1 hour; there is no refresh or logout.
 - Send the token as `Authorization: Bearer <token>`.
-- Public: `POST /users`, `POST /auth/login` and the H2 console. Every `/users/{userId}/...` endpoint (and `GET /users/{userId}`) is only for the user in the token: another user's id returns 403 before the user is looked up (so an unknown id also returns 403). The `ADMIN` role does not bypass this check.
+- Public: `POST /users`, `POST /auth/login` and the H2 console. Every `/users/{userId}/...` endpoint, including preferences (and `GET /users/{userId}`), is only for the user in the token: another user's id returns 403 before the user is looked up (so an unknown id also returns 403). The `ADMIN` role does not bypass this check.
 - `401 AuthenticationRequired`: wrong username or password (same message for both), or a missing, malformed, expired or wrongly signed token. `400 ValidationFailed`: missing username or password.
 - `POST /users` always creates a `CUSTOMER`. One `ADMIN` account is created at startup from configuration if its username does not exist yet.
 
@@ -46,8 +49,6 @@ Secrets are read from environment variables and have no defaults, so the service
 | `ADMIN_PHONE` | `security.admin.phone` | no | `0000000000` |
 
 Tests use the `test` profile (`src/test/resources/application-test.yml`), which sets test-only values.
-
-Not yet implemented: preferences (A3).
 
 ## Running
 

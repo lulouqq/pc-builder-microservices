@@ -1,6 +1,7 @@
 package com.csci318.accountservice.service;
 
 import com.csci318.accountservice.domain.Address;
+import com.csci318.accountservice.domain.Preference;
 import com.csci318.accountservice.domain.User;
 import com.csci318.accountservice.domain.UserProfile;
 import com.csci318.accountservice.domain.ValidationException;
@@ -58,6 +59,14 @@ public class UserService {
         User user = getUser(userId);
         user.updateProfile(new UserProfile(command.firstName(), command.lastName()));
         // save publishes UserProfileUpdated (if the profile changed); dirty checking alone would not.
+        return userRepository.save(user);
+    }
+
+    @Transactional
+    public User updatePreference(String userId, UpdatePreferenceCommand command) {
+        User user = getUser(userId);
+        user.updatePreference(new Preference(command.preference()));
+        // save publishes PreferenceUpdated (if the preference changed); dirty checking alone would not.
         return userRepository.save(user);
     }
 
