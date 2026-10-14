@@ -1,0 +1,46 @@
+server:
+  port: 8085
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: recommendation-service
+  datasource:
+    url: jdbc:h2:mem:recommendationdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+# JWT validation (Architecture Decision 11): same secret as every other service, from the environment.
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+
+# Synchronous REST calls (Architecture Decision 12)
+account-service:
+  base-url: http://localhost:8084/api
+  timeout: 2s
+catalog-service:
+  base-url: http://localhost:8081/api
+  timeout: 2s
+inventory-service:
+  base-url: http://localhost:8082/api
+  timeout: 2s
+
+# LLM used by R1 through LangChain4j (OpenAI-compatible chat API). The service starts without these values;
+# R1 returns 503 ServiceUnavailable until LLM_API_KEY and LLM_MODEL_NAME are set.
+recommendation:
+  llm:
+    base-url: ${LLM_BASE_URL:https://api.openai.com/v1}
+    api-key: ${LLM_API_KEY:}
+    model-name: ${LLM_MODEL_NAME:}
+    timeout: ${LLM_TIMEOUT:60s}

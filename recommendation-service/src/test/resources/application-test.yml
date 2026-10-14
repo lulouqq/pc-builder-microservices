@@ -1,0 +1,5 @@
+# Test-only value for the JWT secret that the main application.yml reads from an environment variable.
+# No LLM key is set: tests replace the LangChain4j ChatModel with a mock.
+security:
+  jwt:
+    secret: test-only-jwt-secret-not-for-production-use

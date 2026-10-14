@@ -10,7 +10,7 @@ CSCI318 Software Engineering Practices & Principles – group project.
 | `inventory-service` | 8082 | placeholder | stock, inventory items, stock reservations |
 | `order-service` | 8083 | placeholder | cart, checkout, orders, order items, order/payment status |
 | `account-service` | 8084 | in progress (A1 - A3 complete) | users, profiles, addresses, preferences |
-| `recommendation-service` | 8085 | placeholder | AI-generated PC builds, compatibility checking, previous build requests |
+| `recommendation-service` | 8085 | R1 - R4 implemented | AI-generated PC builds, compatibility checking, previous build requests |
 
 Each service uses the base path `/api` (see [specs/api-endpoints.md](specs/api-endpoints.md)).
 
