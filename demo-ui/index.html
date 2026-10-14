@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PC Builder Demo</title>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="topbar-inner">
+        <div class="brand">
+          <span class="logo">🖥️</span>
+          <div>
+            <h1>PC Builder Microservices</h1>
+            <p>CSCI318 demo dashboard · 5 services · Kafka · JWT</p>
+          </div>
+        </div>
+        <div class="session-chips" id="session-chips"></div>
+      </div>
+      <nav class="nav">
+        <a href="#login-card">Login</a>
+        <a href="#catalog-card">Catalog</a>
+        <a href="#admin-card">Inventory</a>
+        <a href="#alerts-card">Stock alerts</a>
+        <a href="#rec-card">Recommendation</a>
+        <a href="#order-card">Order</a>
+        <a href="#log-card">API log</a>
+      </nav>
+    </header>
+
+    <main class="grid">
+      <!-- Login -->
+      <section class="card wide" id="login-card">
+        <div class="card-head">
+          <h2>Login</h2>
+          <span class="tag svc-account">account-service · A1, A2</span>
+        </div>
+        <div class="cols-3">
+          <form id="customer-login" class="stack panel">
+            <h3>Customer</h3>
+            <input name="username" placeholder="Username" required autocomplete="username" />
+            <input name="password" type="password" placeholder="Password" required autocomplete="current-password" />
+            <button type="submit">Log in as customer</button>
+            <div class="session" id="customer-session"></div>
+          </form>
+          <form id="admin-login" class="stack panel">
+            <h3>Admin</h3>
+            <input name="username" value="admin" placeholder="Username" required autocomplete="username" />
+            <input name="password" type="password" placeholder="Password (ADMIN_PASSWORD)" required autocomplete="current-password" />
+            <button type="submit">Log in as admin</button>
+            <div class="session" id="admin-session"></div>
+          </form>
+          <form id="register-form" class="stack panel">
+            <h3>Register customer</h3>
+            <div class="row">
+              <input name="username" placeholder="Username" required />
+              <input name="password" type="password" placeholder="Password" required autocomplete="new-password" />
+            </div>
+            <div class="row">
+              <input name="email" type="email" placeholder="Email" required />
+              <input name="phone" placeholder="Phone" required />
+            </div>
+            <div class="row">
+              <input name="firstName" placeholder="First name (optional)" />
+              <input name="lastName" placeholder="Last name (optional)" />
+            </div>
+            <button type="submit" class="secondary">Register</button>
+          </form>
+        </div>
+        <div class="msg" id="login-msg"></div>
+      </section>
+
+      <!-- Catalog -->
+      <section class="card wide" id="catalog-card">
+        <div class="card-head">
+          <h2>Catalog</h2>
+          <span class="tag svc-catalog">catalog-service · C1–C4</span>
+        </div>
+        <form class="toolbar" id="product-search">
+          <select name="categoryId" id="category-filter"><option value="">All categories</option></select>
+          <input name="brand" placeholder="Brand" />
+          <input name="specName" placeholder="Spec name (e.g. Socket)" />
+          <input name="specValue" placeholder="Spec value (e.g. AM5)" />
+          <button type="submit">Search</button>
+        </form>
+        <div class="trending">
+          <div class="subhead">
+            <h3>🔥 Trending <small>(most viewed details in the last 24 h)</small></h3>
+            <button type="button" class="small ghost" id="load-trending">Refresh</button>
+          </div>
+          <div class="chips" id="trending-list"></div>
+        </div>
+        <div class="catalog-grid">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Product</th><th>Category</th><th>Brand</th><th class="num">Price</th></tr>
+              </thead>
+              <tbody id="product-rows"></tbody>
+            </table>
+          </div>
+          <div class="details" id="product-details">
+            <p class="empty">Select a product to see its details, stock status and reviews.</p>
+          </div>
+        </div>
+        <div class="msg" id="catalog-msg"></div>
+      </section>
+
+      <!-- Admin / Inventory -->
+      <section class="card" id="admin-card">
+        <div class="card-head">
+          <h2>Admin / Inventory</h2>
+          <span class="tag svc-inventory">inventory-service · I3</span>
+        </div>
+        <p class="hint" id="admin-hint"></p>
+        <form id="stock-form" class="stack">
+          <div class="row">
+            <select name="productId" class="product-select" id="stock-product" required></select>
+            <button type="button" class="secondary" id="load-stock">Load stock</button>
+          </div>
+          <div class="stats" id="stock-view"></div>
+          <div class="row">
+            <input name="quantity" type="number" min="0" step="1" placeholder="New quantity" required />
+            <input name="reason" placeholder="Reason (optional)" />
+            <button type="submit">Update stock</button>
+          </div>
+          <p class="hint">Available = quantity − reserved. STOCK_LOW fires when available drops below the threshold (default 10); PRODUCT_RESTOCKED when it rises from 0.</p>
+        </form>
+        <details class="fold">
+          <summary>Create category / product (C5, admin)</summary>
+          <form id="category-form" class="row">
+            <input name="name" placeholder="Category name (CPU, Motherboard, RAM, GPU, Storage, PSU, Case)" required />
+            <button type="submit" class="secondary">Create category</button>
+          </form>
+          <form id="product-form" class="stack">
+            <div class="row">
+              <input name="name" placeholder="Product name" required />
+              <input name="brand" placeholder="Brand" required />
+            </div>
+            <div class="row">
+              <input name="price" type="number" min="0" step="0.01" placeholder="Price" required />
+              <select name="categoryId" class="category-select" required></select>
+            </div>
+            <textarea name="specifications" rows="3" placeholder="Specifications, one per line: Name=Value&#10;Socket=AM5&#10;Memory Type=DDR5" required></textarea>
+            <button type="submit" class="secondary">Create product</button>
+          </form>
+        </details>
+        <div class="msg" id="admin-msg"></div>
+      </section>
+
+      <!-- Stock alerts -->
+      <section class="card" id="alerts-card">
+        <div class="card-head">
+          <h2>Stock alerts</h2>
+          <span class="tag svc-inventory">inventory-service · I2</span>
+        </div>
+        <form id="subscribe-form" class="row">
+          <select name="productId" class="product-select" required></select>
+          <button type="submit">Subscribe</button>
+        </form>
+        <div class="subhead">
+          <label class="check"><input type="checkbox" id="alerts-auto" checked /> Auto-refresh every 3 s</label>
+          <button type="button" class="small ghost" id="load-alerts">Refresh</button>
+        </div>
+        <ul class="alerts" id="alerts-list"></ul>
+        <div class="msg" id="alerts-msg"></div>
+      </section>
+
+      <!-- Recommendation -->
+      <section class="card wide" id="rec-card">
+        <div class="card-head">
+          <h2>AI Recommendation</h2>
+          <span class="tag svc-recommendation">recommendation-service · R1, R3, R4</span>
+        </div>
+        <div class="rec-grid">
+          <form id="rec-form" class="stack panel">
+            <label>Budget ($)<input name="budget" type="number" min="1" step="1" value="1500" required /></label>
+            <label>Purpose
+              <input name="purpose" list="purposes" value="Gaming" required />
+              <datalist id="purposes">
+                <option value="Gaming"></option>
+                <option value="Office work"></option>
+                <option value="Video editing"></option>
+                <option value="Software development"></option>
+              </datalist>
+            </label>
+            <label>Preferences (optional)<textarea name="preferences" rows="3" placeholder="e.g. prefer AMD, quiet build"></textarea></label>
+            <button type="submit" id="rec-submit">Generate build</button>
+            <p class="hint">The backend asks the LLM and validates the answer (7 components, compatible, in stock, within budget). This can take up to a minute.</p>
+          </form>
+          <div id="rec-result" class="rec-result">
+            <p class="empty">Generate a build to see the AI recommendation here.</p>
+          </div>
+        </div>
+        <div class="subhead">
+          <h3>Recommendation history (R4)</h3>
+          <button type="button" class="small ghost" id="load-rec-history">Refresh</button>
+        </div>
+        <div class="history-cards" id="rec-history"></div>
+        <div class="msg" id="rec-msg"></div>
+      </section>
+
+      <!-- Order -->
+      <section class="card wide" id="order-card">
+        <div class="card-head">
+          <h2>Order</h2>
+          <span class="tag svc-order">order-service · O1–O6</span>
+        </div>
+        <div class="order-grid">
+          <div class="stack">
+            <div class="step">
+              <span class="num">1</span>
+              <button type="button" id="create-cart">Create cart</button>
+              <span class="hint">A customer has at most one DRAFT cart.</span>
+            </div>
+            <form class="step" id="add-item-form">
+              <span class="num">2</span>
+              <select name="productId" class="product-select" id="cart-product" required></select>
+              <input name="quantity" type="number" min="1" value="1" class="qty" required />
+              <button type="submit" data-needs="DRAFT">Add</button>
+            </form>
+            <form class="step" id="address-form">
+              <span class="num">3</span>
+              <select name="addressId" id="address-select" required></select>
+              <button type="submit" data-needs="DRAFT">Set address</button>
+            </form>
+            <details class="fold">
+              <summary>Add a saved address (A1)</summary>
+              <form id="new-address-form" class="stack">
+                <div class="row">
+                  <input name="streetNo" type="number" min="1" placeholder="No." class="qty" required />
+                  <input name="streetName" placeholder="Street" required />
+                  <input name="suburb" placeholder="Suburb" required />
+                </div>
+                <div class="row">
+                  <input name="city" placeholder="City" required />
+                  <input name="state" placeholder="State" required />
+                  <input name="postCode" type="number" placeholder="Post code" class="qty" required />
+                </div>
+                <button type="submit" class="secondary">Save address</button>
+              </form>
+            </details>
+            <div class="step">
+              <span class="num">4</span>
+              <button type="button" id="checkout" data-needs="DRAFT">Checkout</button>
+              <span class="hint">PLACED → PROCESSING arrives via Kafka</span>
+            </div>
+            <div class="step">
+              <span class="num">5</span>
+              <button type="button" class="success" id="pay-paid" data-needs="PROCESSING">PAID</button>
+              <button type="button" class="danger-outline" id="pay-failed" data-needs="PROCESSING">FAILED</button>
+              <button type="button" class="danger" id="cancel-order" data-needs="CANCELLABLE">Cancel</button>
+            </div>
+          </div>
+          <div id="order-view" class="order-view">
+            <p class="empty">No current order. Create a cart or open one from the history.</p>
+          </div>
+        </div>
+        <div class="msg" id="order-msg"></div>
+        <div class="subhead">
+          <h3>Order history (O5)</h3>
+          <button type="button" class="small ghost" id="load-orders">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Created</th><th>Order</th><th>Status</th><th>Payment</th><th class="num">Items</th><th class="num">Total</th><th></th></tr>
+            </thead>
+            <tbody id="order-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Activity log -->
+      <section class="card wide" id="log-card">
+        <div class="card-head">
+          <h2>Activity / API log</h2>
+          <button type="button" class="small ghost" id="clear-log">Clear</button>
+        </div>
+        <p class="hint">Newest first; click an entry to see the request and response bodies. Polling requests are logged only when their response changes.</p>
+        <ol class="log" id="log-list"></ol>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
