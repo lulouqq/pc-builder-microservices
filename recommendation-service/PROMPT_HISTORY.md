@@ -323,3 +323,129 @@ No commit/push
 - `recommendation-service/src/test/java/com/csci318/recommendationservice/presentation/RecommendationControllerTest.java`
 - `recommendation-service/README.md`
 - `recommendation-service/PROMPT_HISTORY.md`
+
+---
+
+## Prompt 5
+
+**Date:** 2026-10-14
+
+**Goal:** Review the current Catalog create-category/create-product API and write a minimal manual demo/test plan for R2 (`POST /api/compatibility/validate`) with one compatible and one incompatible scenario. No code or spec changes.
+
+**Exact user prompt:**
+
+````text
+Inspect current Catalog implementation, especially create-category/create-product endpoints and DTO.
+
+Create minimal demo setup: CPU, Motherboard, RAM, Case.
+
+Use canonical specs: Socket, Memory Type, Form Factor.
+
+Make one setup compatible.
+
+Add one extra component to create an incompatible scenario, for example a CPU with a different socket.
+
+Provide commands to run Catalog 8081 and Recommendation 8085.
+
+Do precise POST /api/compatibility/validate commands for: compatible:true, compatible:false.
+
+Consider generated UUIDs and explain how to put them together.
+
+Check whether Catalog currently requires authentication.
+
+Don't change anything in code/specs.
+
+Put this review/test plan and prompt down into recommendation-service/PROMPT_HISTORY.md.
+
+No commit/push
+````
+
+### Catalog review (current code)
+
+- `POST /api/categories` — body `CategoryCreateRequest {name}` (`@NotBlank`) → 201 `CategoryResponse {id, name}`. `id` is a server-generated UUID; names are not unique.
+- `POST /api/products` — body `ProductCreateRequest {name, price, brand, categoryId, specifications[{name, value}]}`: name/brand/categoryId `@NotBlank`, price `@NotNull @PositiveOrZero`, specifications `@NotEmpty` (each name/value `@NotBlank`). Unknown `categoryId` → 400 `ValidationFailed`. → 201 `ProductResponse {id, name, price, brand, categoryId, specifications, stockStatus: null}`; `id` is a generated UUID.
+- **Authentication:** Catalog has no Spring Security dependency or configuration, so every endpoint, including the admin C5 endpoints (`POST /categories`, `POST /products`), works without a token. The specs (Architecture Decision 11) say C5 should be ADMIN-only; that is a Catalog gap, not changed here.
+- Catalog needs no environment variables; H2 is in-memory, so all demo data is lost when Catalog restarts (and new UUIDs are generated next time).
+- R2 only calls Catalog (`GET /categories`, `GET /products`); Inventory, Account and the LLM are not needed. R2 is public (no token).
+
+### Demo data
+
+| Product | Category | Specifications | Role |
+|---|---|---|---|
+| AMD Ryzen 5 7600 | CPU | Socket = AM5 | compatible set |
+| MSI B650 Tomahawk | Motherboard | Socket = AM5, Memory Type = DDR5, Form Factor = ATX | compatible set |
+| Corsair Vengeance 32GB DDR5 | RAM | Memory Type = DDR5 | compatible set |
+| Fractal Design North | Case | Form Factor = ATX | compatible set |
+| Intel Core i5-13600K | CPU | Socket = LGA1700 | extra CPU for the incompatible set |
+
+### Test plan
+
+**1. Start the services** (two terminals, from the repository root):
+
+```bash
+./mvnw spring-boot:run -pl catalog-service
+```
+
+```bash
+JWT_SECRET=local-dev-secret-at-least-32-bytes-long ./mvnw spring-boot:run -pl recommendation-service
+```
+
+`JWT_SECRET` is required for Recommendation to start (any value of at least 32 bytes) even though R2 is public. No LLM key is needed for R2.
+
+**2. Create the data and keep the generated UUIDs** (third terminal, bash/zsh, needs `jq`). Each `POST` returns the new `id`; `jq -r .id` stores it in a shell variable, and later requests use the variables, so no UUID has to be copied by hand. Categories are created first because a product needs its category's `id`.
+
+```bash
+CATALOG=http://localhost:8081/api
+REC=http://localhost:8085/api
+
+# categories (canonical names)
+CPU_CAT=$(curl -s -X POST $CATALOG/categories -H 'Content-Type: application/json' -d '{"name":"CPU"}' | jq -r .id)
+MB_CAT=$(curl -s -X POST $CATALOG/categories -H 'Content-Type: application/json' -d '{"name":"Motherboard"}' | jq -r .id)
+RAM_CAT=$(curl -s -X POST $CATALOG/categories -H 'Content-Type: application/json' -d '{"name":"RAM"}' | jq -r .id)
+CASE_CAT=$(curl -s -X POST $CATALOG/categories -H 'Content-Type: application/json' -d '{"name":"Case"}' | jq -r .id)
+
+# compatible set: AM5 / DDR5 / ATX
+CPU_AM5=$(curl -s -X POST $CATALOG/products -H 'Content-Type: application/json' -d "{\"name\":\"AMD Ryzen 5 7600\",\"price\":299.0,\"brand\":\"AMD\",\"categoryId\":\"$CPU_CAT\",\"specifications\":[{\"name\":\"Socket\",\"value\":\"AM5\"}]}" | jq -r .id)
+MB_AM5=$(curl -s -X POST $CATALOG/products -H 'Content-Type: application/json' -d "{\"name\":\"MSI B650 Tomahawk\",\"price\":329.0,\"brand\":\"MSI\",\"categoryId\":\"$MB_CAT\",\"specifications\":[{\"name\":\"Socket\",\"value\":\"AM5\"},{\"name\":\"Memory Type\",\"value\":\"DDR5\"},{\"name\":\"Form Factor\",\"value\":\"ATX\"}]}" | jq -r .id)
+RAM_DDR5=$(curl -s -X POST $CATALOG/products -H 'Content-Type: application/json' -d "{\"name\":\"Corsair Vengeance 32GB DDR5\",\"price\":169.0,\"brand\":\"Corsair\",\"categoryId\":\"$RAM_CAT\",\"specifications\":[{\"name\":\"Memory Type\",\"value\":\"DDR5\"}]}" | jq -r .id)
+CASE_ATX=$(curl -s -X POST $CATALOG/products -H 'Content-Type: application/json' -d "{\"name\":\"Fractal Design North\",\"price\":199.0,\"brand\":\"Fractal Design\",\"categoryId\":\"$CASE_CAT\",\"specifications\":[{\"name\":\"Form Factor\",\"value\":\"ATX\"}]}" | jq -r .id)
+
+# extra CPU with a different socket
+CPU_LGA1700=$(curl -s -X POST $CATALOG/products -H 'Content-Type: application/json' -d "{\"name\":\"Intel Core i5-13600K\",\"price\":389.0,\"brand\":\"Intel\",\"categoryId\":\"$CPU_CAT\",\"specifications\":[{\"name\":\"Socket\",\"value\":\"LGA1700\"}]}" | jq -r .id)
+
+echo "CPU_AM5=$CPU_AM5 MB_AM5=$MB_AM5 RAM_DDR5=$RAM_DDR5 CASE_ATX=$CASE_ATX CPU_LGA1700=$CPU_LGA1700"
+```
+
+Without `jq`: run each `POST` without `| jq -r .id`, copy the `"id"` from the JSON response and set the variable by hand (e.g. `CPU_CAT=7781fd98-...`). The ids can also be read back with `curl -s $CATALOG/categories` and `curl -s $CATALOG/products`. The variables exist only in that terminal session.
+
+**3. compatible: true** (AM5 CPU + AM5/DDR5/ATX motherboard + DDR5 RAM + ATX case):
+
+```bash
+curl -s -X POST $REC/compatibility/validate -H 'Content-Type: application/json' \
+  -d "{\"productIds\":[\"$CPU_AM5\",\"$MB_AM5\",\"$RAM_DDR5\",\"$CASE_ATX\"]}"
+```
+
+Expected: `200 {"compatible":true,"conflicts":[]}`
+
+**4. compatible: false** (LGA1700 CPU instead of the AM5 CPU):
+
+```bash
+curl -s -X POST $REC/compatibility/validate -H 'Content-Type: application/json' \
+  -d "{\"productIds\":[\"$CPU_LGA1700\",\"$MB_AM5\",\"$RAM_DDR5\",\"$CASE_ATX\"]}"
+```
+
+Expected: `200 {"compatible":false,"conflicts":[{"specName":"Socket","productIds":["<CPU_LGA1700>","<MB_AM5>"],"message":"Socket does not match: CPU 'Intel Core i5-13600K' has 'LGA1700' but Motherboard 'MSI B650 Tomahawk' has 'AM5'"}]}`
+
+Optional checks: both CPUs in one request → 400 `ValidationFailed` ("more than one was given for CPU"); `{"productIds":["does-not-exist"]}` → 404 `ResourceNotFound`; `{"productIds":[]}` → 400; Catalog stopped → 503 `ServiceUnavailable`.
+
+### Verification run
+
+The plan was run once against the current code with the exact commands above (both services started with `./mvnw spring-boot:run`, then stopped). Results: compatible set → `compatible: true`, no conflicts; LGA1700 set → `compatible: false` with one `Socket` conflict and the message above; both CPUs → 400; unknown id → 404. Catalog accepted all `POST`s without a token.
+
+**Summary of changes:**
+
+- Review and manual test plan only; no code, configuration or spec changes. Demo data lives only in the in-memory H2 databases of that run.
+
+**Files created/modified:**
+
+- `recommendation-service/PROMPT_HISTORY.md`
