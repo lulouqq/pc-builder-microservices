@@ -1,23 +1,23 @@
 package com.csci318.catalogservice;
 
-import com.csci318.catalogservice.domain.StockStatus;
-import com.csci318.catalogservice.infrastructure.RestInventoryClient;
-import com.sun.net.httpserver.HttpServer;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.springframework.web.client.RestClient;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.web.client.RestClient;
+
+import com.csci318.catalogservice.domain.StockStatus;
+import com.csci318.catalogservice.infrastructure.RestInventoryClient;
+import com.sun.net.httpserver.HttpServer;
 
 /**
  * C2: the REST adapter for Inventory Service, tested against a local stub HTTP server that answers
- * GET /api/inventory/{productId} with the provisional InventoryResponse contract
+ * GET /api/inventory/{productId} with the InventoryResponse contract
  * (quantity, reservedQuantity).
  */
 class RestInventoryClientTests {

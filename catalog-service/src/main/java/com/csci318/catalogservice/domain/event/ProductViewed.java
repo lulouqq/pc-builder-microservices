@@ -1,12 +1,14 @@
 package com.csci318.catalogservice.domain.event;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
- * Domain event: a product's details were viewed (input to the trending list, C3).
- *
- * PROVISIONAL: nothing publishes this event yet. Its Kafka schema, topic and producer are proposed
- * in the catalog-service README and are waiting for team approval.
+ * Domain event: a product's details were viewed (C2). It is the input to the trending list (C3) and the
+ * only Catalog event published to Kafka (topic catalog-events, Architecture Decisions 9 and 16).
  */
-public record ProductViewed(String productId, LocalDateTime occurredAt) {
+public record ProductViewed(String productId, Instant occurredAt) {
+
+    public static ProductViewed of(String productId) {
+        return new ProductViewed(productId, Instant.now());
+    }
 }

@@ -11,12 +11,20 @@ import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -30,6 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 @RecordApplicationEvents
 class CatalogManagementTests {
 
@@ -45,24 +54,32 @@ class CatalogManagementTests {
     @Autowired
     private ApplicationEvents events;
 
+    @Value("${security.jwt.secret}")
+    private String jwtSecret;
+
+    private String admin;
+    private String customer;
+
     @BeforeEach
     void clearDatabase() {
         productRepository.deleteAll();
         categoryRepository.deleteAll();
+        admin = TestTokens.bearer(jwtSecret, "admin-1", "ADMIN");
+        customer = TestTokens.bearer(jwtSecret, "user-1", "CUSTOMER");
     }
 
     @Test
     void createsUpdatesAndRemovesCategory() throws Exception {
         String categoryId = createCategory("CPU");
 
-        mockMvc.perform(put("/categories/{id}", categoryId)
+        mockMvc.perform(asAdmin(put("/categories/{id}", categoryId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"Processors\"}"))
+                        .content("{\"name\": \"Processors\"}")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(categoryId))
                 .andExpect(jsonPath("$.name").value("Processors"));
 
-        mockMvc.perform(delete("/categories/{id}", categoryId))
+        mockMvc.perform(asAdmin(delete("/categories/{id}", categoryId)))
                 .andExpect(status().isNoContent());
         assertThat(categoryRepository.existsById(categoryId)).isFalse();
     }
@@ -85,9 +102,9 @@ class CatalogManagementTests {
         String categoryId = createCategory("CPU");
         String productId = createProduct(categoryId);
 
-        mockMvc.perform(put("/products/{id}", productId)
+        mockMvc.perform(asAdmin(put("/products/{id}", productId)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(productJson("Ryzen 5 7600X", 329.0, categoryId, "Cores", "6")))
+                        .content(productJson("Ryzen 5 7600X", 329.0, categoryId, "Cores", "6"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(productId))
                 .andExpect(jsonPath("$.name").value("Ryzen 5 7600X"))
@@ -104,7 +121,7 @@ class CatalogManagementTests {
     void removesProduct() throws Exception {
         String productId = createProduct(createCategory("CPU"));
 
-        mockMvc.perform(delete("/products/{id}", productId))
+        mockMvc.perform(asAdmin(delete("/products/{id}", productId)))
                 .andExpect(status().isNoContent());
 
         assertThat(productRepository.existsById(productId)).isFalse();
@@ -116,50 +133,50 @@ class CatalogManagementTests {
         String categoryId = createCategory("CPU");
 
         // missing name and no specifications
-        mockMvc.perform(post("/products")
+        mockMvc.perform(asAdmin(post("/products")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"price\": 10, \"brand\": \"AMD\", \"categoryId\": \"" + categoryId
-                                + "\", \"specifications\": []}"))
+                                + "\", \"specifications\": []}")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("ValidationFailed"));
+                .andExpect(jsonPath("$.code").value("ValidationFailed"));
 
         // category does not exist
-        mockMvc.perform(post("/products")
+        mockMvc.perform(asAdmin(post("/products")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(productJson("Ryzen 5 7600", 299.0, "no-such-category", "Socket", "AM5")))
+                        .content(productJson("Ryzen 5 7600", 299.0, "no-such-category", "Socket", "AM5"))))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("ValidationFailed"));
+                .andExpect(jsonPath("$.code").value("ValidationFailed"));
 
         assertThat(productRepository.count()).isZero();
     }
 
     @Test
     void rejectsInvalidCategory() throws Exception {
-        mockMvc.perform(post("/categories")
+        mockMvc.perform(asAdmin(post("/categories")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"\"}"))
+                        .content("{\"name\": \"\"}")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("ValidationFailed"));
+                .andExpect(jsonPath("$.code").value("ValidationFailed"));
     }
 
     @Test
     void returnsNotFoundForUnknownProductOrCategory() throws Exception {
         String categoryId = createCategory("CPU");
 
-        mockMvc.perform(put("/products/{id}", "unknown")
+        mockMvc.perform(asAdmin(put("/products/{id}", "unknown")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(productJson("Ryzen 5 7600", 299.0, categoryId, "Socket", "AM5")))
+                        .content(productJson("Ryzen 5 7600", 299.0, categoryId, "Socket", "AM5"))))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error").value("ResourceNotFound"));
-        mockMvc.perform(delete("/products/{id}", "unknown"))
+                .andExpect(jsonPath("$.code").value("ResourceNotFound"));
+        mockMvc.perform(asAdmin(delete("/products/{id}", "unknown")))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(put("/categories/{id}", "unknown")
+        mockMvc.perform(asAdmin(put("/categories/{id}", "unknown")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"GPU\"}"))
+                        .content("{\"name\": \"GPU\"}")))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(delete("/categories/{id}", "unknown"))
+        mockMvc.perform(asAdmin(delete("/categories/{id}", "unknown")))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error").value("ResourceNotFound"));
+                .andExpect(jsonPath("$.code").value("ResourceNotFound"));
     }
 
     @Test
@@ -167,29 +184,73 @@ class CatalogManagementTests {
         String categoryId = createCategory("CPU");
         createProduct(categoryId);
 
-        mockMvc.perform(delete("/categories/{id}", categoryId))
+        mockMvc.perform(asAdmin(delete("/categories/{id}", categoryId)))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error").value("CategoryInUse"));
+                .andExpect(jsonPath("$.code").value("CategoryInUse"));
 
         assertThat(categoryRepository.existsById(categoryId)).isTrue();
     }
 
     @Test
     void usesContractErrorCodesForFrameworkErrors() throws Exception {
-        mockMvc.perform(post("/categories")
+        mockMvc.perform(asAdmin(post("/categories")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("not json"))
+                        .content("not json")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("ValidationFailed"));
-        mockMvc.perform(delete("/no-such-path"))
+                .andExpect(jsonPath("$.code").value("ValidationFailed"));
+        mockMvc.perform(asAdmin(delete("/no-such-path")))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error").value("ResourceNotFound"));
+                .andExpect(jsonPath("$.code").value("ResourceNotFound"));
+    }
+
+    // --- access control ---
+
+    @Test
+    void managementEndpointsRejectMissingInvalidAndCustomerTokens() throws Exception {
+        String categoryId = createCategory("CPU");
+        String productId = createProduct(categoryId);
+        String expired = TestTokens.bearer(jwtSecret, "admin-1", "ADMIN", Instant.now().minusSeconds(60));
+        String foreign = TestTokens.bearer("another-secret-that-is-long-enough-123", "admin-1", "ADMIN");
+        String categoryJson = "{\"name\": \"GPU\"}";
+        String productJson = productJson("Ryzen 5 7600X", 329.0, categoryId, "Socket", "AM5");
+
+        // a new builder for every call: headers added to a builder are kept
+        List<Supplier<MockHttpServletRequestBuilder>> requests = List.of(
+                () -> post("/products").contentType(MediaType.APPLICATION_JSON).content(productJson),
+                () -> put("/products/{id}", productId).contentType(MediaType.APPLICATION_JSON).content(productJson),
+                () -> delete("/products/{id}", productId),
+                () -> post("/categories").contentType(MediaType.APPLICATION_JSON).content(categoryJson),
+                () -> put("/categories/{id}", categoryId).contentType(MediaType.APPLICATION_JSON)
+                        .content(categoryJson),
+                () -> delete("/categories/{id}", categoryId));
+        for (Supplier<MockHttpServletRequestBuilder> request : requests) {
+            mockMvc.perform(request.get())
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("AuthenticationRequired"))
+                    .andExpect(jsonPath("$.message").isNotEmpty());
+            for (String badToken : List.of(expired, foreign, "Bearer not-a-token")) {
+                mockMvc.perform(request.get().header(HttpHeaders.AUTHORIZATION, badToken))
+                        .andExpect(status().isUnauthorized())
+                        .andExpect(jsonPath("$.code").value("AuthenticationRequired"));
+            }
+            mockMvc.perform(request.get().header(HttpHeaders.AUTHORIZATION, customer))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.code").value("AccessDenied"));
+        }
+
+        // nothing was created, changed or removed
+        assertThat(categoryRepository.findAll()).extracting("name").containsExactly("CPU");
+        assertThat(productRepository.findAll()).extracting("name").containsExactly("Ryzen 5 7600");
+    }
+
+    private MockHttpServletRequestBuilder asAdmin(MockHttpServletRequestBuilder request) {
+        return request.header(HttpHeaders.AUTHORIZATION, admin);
     }
 
     private String createCategory(String name) throws Exception {
-        String body = mockMvc.perform(post("/categories")
+        String body = mockMvc.perform(asAdmin(post("/categories")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"name\": \"" + name + "\"}"))
+                        .content("{\"name\": \"" + name + "\"}")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value(name))
                 .andReturn().getResponse().getContentAsString();
@@ -197,9 +258,9 @@ class CatalogManagementTests {
     }
 
     private String createProduct(String categoryId) throws Exception {
-        String body = mockMvc.perform(post("/products")
+        String body = mockMvc.perform(asAdmin(post("/products")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(productJson("Ryzen 5 7600", 299.0, categoryId, "Socket", "AM5")))
+                        .content(productJson("Ryzen 5 7600", 299.0, categoryId, "Socket", "AM5"))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name").value("Ryzen 5 7600"))
                 .andExpect(jsonPath("$.price").value(299.0))

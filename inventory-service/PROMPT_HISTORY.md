@@ -80,3 +80,44 @@ For rest of the gaps, check if implementing Order service will better to resolve
 - `inventory-service/src/test/java/com/csci318/inventoryservice/*.java`
 - `inventory-service/README.md`, `inventory-service/PROMPT_HISTORY.md`
 - `pom.xml`, `README.md`, `specs/api-endpoints.md`, `specs/event-sourcing.md`, `specs/architecture.md`, `PROMPT_HISTORY.md` (project-wide files; see root Prompt 25)
+
+---
+
+## Prompt 2
+
+**Date:** 2026-10-14
+
+**Goal:** Analyse I2 (stock notifications) and propose the simplest complete design for delivering notifications to subscribed customers. Analysis only — no code or spec changes.
+
+**Exact user prompt:**
+
+````text
+Inspect the current implementation of I2 in Inventory Service, FR-07, related specs/domain model, and the current inventory-stock-events Kafka flow.
+Come up with the simplest complete option for delivering notifications about products the user subscribed to, without adding new libraries or external services. A good option would be to save notifications in H2 and provide a REST endpoint for the client to retrieve them.
+At first, don't change anything in the code. Only provide:
+how I2 works now and what is still missing;
+a minimal solution design;
+which new or changed REST endpoints and DTOs are needed;
+which changes are needed in the domain model, specs, and architecture;
+how the Kafka flow will work from StockChanged to the user notification;
+which decisions need to be made before implementation;
+which tests need to be added.
+````
+
+**Summary of changes:**
+
+- No code or spec changes. Design proposal given in the reply: Inventory Service consumes its own `inventory-stock-events`, stores one notification per subscriber in H2 for `STOCK_LOW` / `PRODUCT_RESTOCKED`, and serves them with an owner-only `GET /users/{userId}/...` endpoint; in-process fallback when Kafka is disabled. Open decisions and the test plan are listed in the reply.
+
+**Files created/modified:**
+
+- `inventory-service/PROMPT_HISTORY.md`
+
+---
+
+## Prompt 3
+
+**Date:** 2026-10-14
+
+**Goal:** Implement I2 stock alerts (stored in H2, read with `GET /users/{userId}/stock-alerts`) after the approved decisions were added to the specs.
+
+This prompt also changed shared specs, so the full entry (exact prompt, summary, files) is recorded as **Prompt 32** in the root [`PROMPT_HISTORY.md`](../PROMPT_HISTORY.md).

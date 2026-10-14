@@ -1460,3 +1460,189 @@ No code changes needed.
 - `specs/domain-model.md`
 - `specs/architecture.md`
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 30
+
+**Date:** 2026-10-14
+
+**Goal:** Audit all five services against `specs/`, the READMEs and the architecture decisions; list what is still missing or inconsistent. Review only — no code changes.
+
+**Exact user prompt:**
+
+````text
+Compare all implemented services against specs/, README, and architecture decisions. check every requirement C1–C5, I1–I3, O1–O6, A1–A3, R1–R4. verify REST contracts, JWT rules, Kafka flows, error responses, persistence, tests, and known TODO/gaps. then give only a prioritized list of what is still missing or inconsistent, separating blockers from nice-to-have improvements. Do not modify code.
+````
+
+**Summary of changes:**
+
+- No code or spec changes. `./mvnw clean test` passes (281 tests: catalog 46, inventory 41, order 54, account 68, recommendation 72).
+- Findings (in the reply to the user). Blockers: catalog-service has no JWT security (C5 admin, C4 owner, NFR-04); C3 is missing (no `GET /products/trending`, no `ProductViewed` Kafka publisher/consumer, and no agreed topic/window/size in the specs); catalog's error body uses `error` instead of `code`; I2 customer notification is undecided (`StockChanged` has no consumer). Nice-to-have: no optimistic locking on `Order` (Kafka/cancel/payment/timeout races), `CheckStockAvailabilityQuery` missing, non-contract error bodies for framework 404/405/415 in account and recommendation, no A1 DTO table in the specs, no demo seed data, stale READMEs and "PROVISIONAL" comments, no cross-service contract test.
+
+**Files created/modified:**
+
+- `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 31
+
+**Date:** 2026-10-14
+
+**Goal:** Record the approved C3 (trending products) decisions in the specs, then implement C3 in catalog-service with tests.
+
+**Exact user prompt:**
+
+````text
+Approved decisions: views only. catalog-events keyed by productId. standard event fields + productId, using Instant; publish only after successful C2 lookup. every view counts. use Spring Kafka @KafkaListener, not Kafka Streams. configurable 24-hour window and top 10. persist views in H2. filter deleted products when reading. return fewer than N or empty list. keep ProductResponse unchanged. Kafka publish failure must not fail C2. when Kafka is disabled process views in-process. use consumer group catalog-service and assume one instance.
+Update the specs first, then implement C3 and its tests. Do not change unrelated features.
+````
+
+**Summary of changes:**
+
+- Specs (written before the code):
+  - `specs/architecture.md`: new Architecture Decision 16 (trending products) with the approved decisions; Kafka Event Contracts gets the `catalog-events` topic (key `productId`, consumer group `catalog-service`), the `ProductViewed` event fields, when it is published, and the "Trending views" processing rule (repeated `eventId` skipped); decision 14 no longer lists C3 as open.
+  - `specs/api-endpoints.md`: C2 note (published only when the product is found, failed publish does not fail the request) and a C3 note (window, size, ordering, removed products, shorter or empty list).
+  - `specs/domain-model.md` 1.5: `ProductViewed` row (only when the product is found; topic `catalog-events`).
+- catalog-service:
+  - `spring-kafka` (+ `spring-kafka-test`); Kafka settings, `catalog.trending.window` (24h) and `catalog.trending.size` (10), `messaging.kafka.enabled` in `application.yml`; tests run with Kafka disabled unless they use an embedded broker.
+  - `ProductViewed` now uses `Instant`; `TrendingProductsCalculator` switched to `Instant` (logic unchanged).
+  - `ProductService.getProductDetails` raises `ProductViewed` after a successful lookup; `GET /products/trending` added to `ProductController`.
+  - New: `TrendingService`, `StoredProductView` + `ProductViewRepository` (H2), `KafkaTopics`, `ProductViewedKafkaPublisher` (after commit, failures logged), `ProductViewedKafkaListener` (group `catalog-service`), `InProcessProductViewRecorder` (Kafka disabled).
+  - Tests: `TrendingProductsTests` (10), `ProductViewedKafkaMessagingTests` (5), `CatalogKafkaIntegrationTests` (2, embedded Kafka), calculator tests moved to `Instant` with one new tie-break test. `TrendingService` is not mocked with Mockito because the JDK in use (26) is not supported by Mockito's Byte Buddy for concrete classes; a recording subclass is used instead.
+  - `catalog-service/README.md`: C3 proposal replaced by the implemented design; status table. Root `README.md`: catalog status and Kafka users.
+- `./mvnw clean test`: all pass (catalog 67, inventory 41, order 54, account 68, recommendation 72).
+
+**Files created/modified:**
+
+- `specs/architecture.md`, `specs/api-endpoints.md`, `specs/domain-model.md`
+- `catalog-service/pom.xml`, `catalog-service/src/main/resources/application.yml`, `catalog-service/src/test/resources/application-test.yml`
+- `catalog-service/src/main/java/com/csci318/catalogservice/domain/{TrendingProductsCalculator,event/ProductViewed}.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/service/{ProductService,TrendingService}.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/infrastructure/{StoredProductView,ProductViewRepository,KafkaTopics,ProductViewedKafkaPublisher,ProductViewedKafkaListener,InProcessProductViewRecorder}.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/presentation/ProductController.java`
+- `catalog-service/src/test/java/com/csci318/catalogservice/{TrendingProductsTests,ProductViewedKafkaMessagingTests,CatalogKafkaIntegrationTests,TrendingProductsCalculatorTests}.java`
+- `catalog-service/README.md`, `README.md`, `PROMPT_HISTORY.md`, `catalog-service/PROMPT_HISTORY.md`
+
+---
+
+## Prompt 32
+
+**Date:** 2026-10-14
+
+**Goal:** Record the approved I2 (stock notifications) decisions in the shared specs, then implement stored stock alerts with a polling endpoint in inventory-service, with tests.
+
+**Exact user prompt:**
+
+````text
+Confirming the minimal I2 design and the suggested decisions from the previous analysis. Use:
+saved StockAlert entities in H2;
+GET /users/{userId}/stock-alerts, owner-only;
+consumer group inventory-stock-alerts;
+notifications only for STOCK_LOW and PRODUCT_RESTOCKED;
+subscriptions remain active after a notification;
+unsubscribe, read/unread, pagination and retention are out of scope for now;
+each alert contains productId, availableQuantity, type, generated message, occurredAt, and sourceEventId;
+deduplication through unique (sourceEventId, userId);
+no Catalog calls;
+when KAFKA_ENABLED=false, use the in-process fallback through the same service;
+if a user subscribes after a stock change but before the Kafka event is processed, they may still receive the alert — this is acceptable and must be documented.
+In the specs, describe “real-time” carefully: the alert is created within a few seconds after the stock change and becomes available to the client through REST polling; push delivery is not implemented.
+First update the shared specs, architecture, domain model, API, CQRS and user stories, then implement the code and tests from your plan. Don’t change unrelated parts of the project.
+After implementation, run the full ./mvnw clean test and provide a report:
+which files changed;
+how many tests passed for each module;
+which new tests were added;
+whether any known gaps remain.
+````
+
+**Summary of changes:**
+
+- Specs (written before the code):
+  - `specs/architecture.md`: new Architecture Decision 17 (stock notifications: stored alerts, polling, the meaning of "real time", consumer group `inventory-stock-alerts`, only `STOCK_LOW` / `PRODUCT_RESTOCKED`, deduplication, in-process fallback, accepted subscribe-before-processing case, out-of-scope items). `inventory-stock-events` now has a consumer, the Kafka Flows row names it, a "Stock alerts" processing rule was added, and decision 14 no longer lists I2 as open.
+  - `specs/domain-model.md`: `StockAlert` entity (new section 2.4) and the class table rows.
+  - `specs/api-endpoints.md`: `GET /users/{userId}/stock-alerts`, `StockAlertResponse`, an I2 note (newest first, empty list, no 404, polling), and the endpoint in the Customer (owner) row.
+  - `specs/cqrs.md`: `stock_alert` read side, I2 classification, `GetStockAlertsQuery`, the stock-alert flow.
+  - `specs/user-stories.md`: I2 mapping, endpoint mapping and an agreed-flow note under I2.
+- inventory-service:
+  - New: `StockAlert` + `StockAlertType` (domain), `StockAlertRepository`, `StockAlertService` (one alert per subscriber, skips an existing `sourceEventId` + `userId`, `REQUIRES_NEW`), `StockChangedKafkaListener` (group `inventory-stock-alerts`), `InProcessStockAlertRecorder` (Kafka disabled, after commit), `GetStockAlertsQuery`, `StockAlertController`, `StockAlertResponse`.
+  - Changed: `InventoryQueryService` (handles `GetStockAlertsQuery`), `StockNotificationSubscriptionRepository.findByProductId`, `SecurityConfig` (`/users/{userId}/**` own-user rule, as in Recommendation Service), `KafkaTopics` comment.
+  - Tests: `StockAlertTests` (3), `StockChangedKafkaListenerTests` (4), `StockAlertApiTests` (8), and 2 new tests in `InventoryKafkaIntegrationTests` (embedded Kafka). Existing tests unchanged.
+  - `inventory-service/README.md` and root `README.md`: I2 status, endpoint, Kafka consumer, assumptions, remaining gaps.
+- `./mvnw clean test`: all pass (catalog 67, account 68, recommendation 72, inventory 58, order 54).
+
+**Files created/modified:**
+
+- `specs/architecture.md`, `specs/domain-model.md`, `specs/api-endpoints.md`, `specs/cqrs.md`, `specs/user-stories.md`
+- `inventory-service/src/main/java/com/csci318/inventoryservice/domain/{StockAlert,StockAlertType}.java`
+- `inventory-service/src/main/java/com/csci318/inventoryservice/infrastructure/{StockAlertRepository,StockChangedKafkaListener,InProcessStockAlertRecorder,StockNotificationSubscriptionRepository,SecurityConfig,KafkaTopics}.java`
+- `inventory-service/src/main/java/com/csci318/inventoryservice/service/{StockAlertService,GetStockAlertsQuery,InventoryQueryService}.java`
+- `inventory-service/src/main/java/com/csci318/inventoryservice/presentation/{StockAlertController,dto/StockAlertResponse}.java`
+- `inventory-service/src/test/java/com/csci318/inventoryservice/{StockAlertTests,StockChangedKafkaListenerTests,StockAlertApiTests,InventoryKafkaIntegrationTests}.java`
+- `inventory-service/README.md`, `README.md`, `PROMPT_HISTORY.md`, `inventory-service/PROMPT_HISTORY.md`
+
+---
+
+## Prompt 33
+
+**Date:** 2026-10-14
+
+**Goal:** Final audit before submission: compare the code, specs, READMEs and architecture decisions; no changes.
+
+**Exact user prompt:**
+
+````text
+Now run the final and last audit of the project before submission. Compare the current code, specs, README files, and architecture decisions.
+Don't change anything.
+Give only:
+Are there any real blockers left?
+Which gaps can be left as known limitations?
+Which docs still need to be fixed?
+What should be shown in the demo?
+Can the project be considered submission-ready?
+Don't suggest extra refactoring or nice-to-have improvements if they are not required by the project requirements.
+````
+
+**Summary:**
+
+- Analysis only; no files changed (this entry was added with Prompt 34, because the prompt asked for no changes).
+- Every endpoint in `specs/api-endpoints.md` is implemented; all stories C1–C5, I1–I3, O1–O6, A1–A3, R1–R4 are implemented; last full `./mvnw clean test`: 319 tests passing. No real blockers.
+- Known limitations: I2 polling only (no push, unsubscribe, read/unread, pagination, retention); framework error bodies for unknown path / 405 / 415 in account and recommendation; no optimistic locking on Order and a 500 on simultaneous inventory REST writes; no outbox or dead-letter topic; `CheckStockAvailabilityQuery` not implemented; C3 view rows not pruned and one Catalog instance; R1 needs an LLM key and uses no tool-calling (decision 12); in-memory H2 without seed data; the cross-service order flow needs Kafka.
+- Doc gaps found: root README account status and technology stack; recommendation README (outdated R3 note and Inventory assumption); missing A1 DTOs in `specs/api-endpoints.md`.
+- Demo plan proposed (setup with Kafka, shared `JWT_SECRET`, `ADMIN_PASSWORD`, LLM key, `PAYMENT_TIME_LIMIT=1m`; flow through A, C, I, O and R stories, event store / read model and the test run). Verdict: submission-ready after the doc fixes.
+
+**Files created/modified:**
+
+- None
+
+---
+
+## Prompt 34
+
+**Date:** 2026-10-14
+
+**Goal:** Fix only the doc gaps found in the final audit (Prompt 33); no code changes.
+
+**Exact user prompt:**
+
+````text
+Fix only the necessary doc gaps found in the final audit:
+Update the root README.md: change Account status to A1–A3 implemented, and add Spring Security/JWT and LangChain4j to the technology stack.
+Update recommendation-service/README.md: remove the outdated phrase saying that the Order side of R3 is not implemented, and remove the outdated provisional Inventory assumption.
+Add the A1 DTO contracts to specs/api-endpoints.md: UserRegistrationRequest, UserResponse, ProfileUpdateRequest, AddressCreateRequest, AddressUpdateRequest, and AddressResponse.
+Add this final audit and this doc-fix prompt to the root PROMPT_HISTORY.md.
+Don’t change any code or make any other improvements.
+After that, run the full ./mvnw clean test and provide a short report.
+````
+
+**Summary of changes:**
+
+- Root `README.md`: account-service status "A1 - A3 implemented"; technology stack lists Spring Security with JWT and LangChain4j.
+- `recommendation-service/README.md`: R3 status is "Implemented" (outdated Order Service note removed); the Inventory-response assumption removed from "Assumptions to confirm" and the remaining items renumbered.
+- `specs/api-endpoints.md`: new "Account Service DTOs (A1)" table (`UserRegistrationRequest`, `UserResponse`, `ProfileUpdateRequest`, `AddressCreateRequest`, `AddressUpdateRequest`, `AddressResponse`), with the fields taken from the existing account-service DTOs and a note on required fields and errors as implemented.
+- `./mvnw clean test`: see the report of this prompt.
+
+**Files created/modified:**
+
+- `README.md`, `recommendation-service/README.md`, `specs/api-endpoints.md`, `PROMPT_HISTORY.md`

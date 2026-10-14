@@ -7,6 +7,7 @@ import com.csci318.catalogservice.presentation.dto.ProductResponse;
 import com.csci318.catalogservice.presentation.dto.ProductUpdateRequest;
 import com.csci318.catalogservice.presentation.dto.SpecificationDto;
 import com.csci318.catalogservice.service.ProductService;
+import com.csci318.catalogservice.service.TrendingService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,9 +28,11 @@ import java.util.List;
 public class ProductController {
 
     private final ProductService productService;
+    private final TrendingService trendingService;
 
-    public ProductController(ProductService productService) {
+    public ProductController(ProductService productService, TrendingService trendingService) {
         this.productService = productService;
+        this.trendingService = trendingService;
     }
 
     @GetMapping
@@ -40,6 +43,12 @@ public class ProductController {
         return productService.searchProducts(categoryId, brand, specName, specValue).stream()
                 .map(ProductResponse::from)
                 .toList();
+    }
+
+    /** C3: the most viewed products of the trending window, most viewed first. */
+    @GetMapping("/trending")
+    public List<ProductResponse> getTrendingProducts() {
+        return trendingService.getTrendingProducts().stream().map(ProductResponse::from).toList();
     }
 
     @GetMapping("/{productId}")

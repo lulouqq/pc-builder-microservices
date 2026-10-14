@@ -5,7 +5,7 @@ import com.csci318.catalogservice.domain.event.ProductViewed;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
  */
 class TrendingProductsCalculatorTests {
 
-    private static final LocalDateTime NOW = LocalDateTime.of(2026, 10, 10, 12, 0);
+    private static final Instant NOW = Instant.parse("2026-10-10T12:00:00Z");
     private static final Duration ONE_HOUR = Duration.ofHours(1);
 
     private final TrendingProductsCalculator calculator = new TrendingProductsCalculator();
@@ -36,7 +36,7 @@ class TrendingProductsCalculatorTests {
                 viewed("old", 61), viewed("old", 90), viewed("old", 120),
                 viewed("edge", 60),
                 viewed("recent", 59),
-                new ProductViewed("future", NOW.plusMinutes(1)));
+                new ProductViewed("future", NOW.plus(Duration.ofMinutes(1))));
 
         // the window is (now - 1h, now]: a view exactly one hour old is outside it
         assertThat(calculator.topProducts(views, NOW, ONE_HOUR, 10)).containsExactly("recent");
@@ -57,6 +57,13 @@ class TrendingProductsCalculatorTests {
                 viewed("ram", 50), viewed("ram", 45));
 
         assertThat(calculator.topProducts(views, NOW, ONE_HOUR, 10)).containsExactly("gpu", "cpu", "ram");
+    }
+
+    @Test
+    void breaksRemainingTiesByProductId() {
+        List<ProductViewed> views = List.of(viewed("ram", 10), viewed("cpu", 10), viewed("gpu", 10));
+
+        assertThat(calculator.topProducts(views, NOW, ONE_HOUR, 10)).containsExactly("cpu", "gpu", "ram");
     }
 
     @Test
@@ -84,6 +91,6 @@ class TrendingProductsCalculatorTests {
     }
 
     private ProductViewed viewed(String productId, int minutesAgo) {
-        return new ProductViewed(productId, NOW.minusMinutes(minutesAgo));
+        return new ProductViewed(productId, NOW.minus(Duration.ofMinutes(minutesAgo)));
     }
 }

@@ -1,0 +1,9 @@
+# Test-only value for the secret that the main application.yml reads from an environment variable.
+security:
+  jwt:
+    secret: test-only-jwt-secret-not-for-production-use
+
+# Tests run without a Kafka broker unless a test enables it with an embedded one.
+messaging:
+  kafka:
+    enabled: false

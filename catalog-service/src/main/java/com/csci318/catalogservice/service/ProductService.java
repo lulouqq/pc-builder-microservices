@@ -5,6 +5,7 @@ import com.csci318.catalogservice.domain.Specification;
 import com.csci318.catalogservice.domain.event.ProductCreated;
 import com.csci318.catalogservice.domain.event.ProductRemoved;
 import com.csci318.catalogservice.domain.event.ProductUpdated;
+import com.csci318.catalogservice.domain.event.ProductViewed;
 import com.csci318.catalogservice.infrastructure.CategoryRepository;
 import com.csci318.catalogservice.infrastructure.ProductRepository;
 import org.springframework.context.ApplicationEventPublisher;
@@ -38,10 +39,15 @@ public class ProductService {
         return productRepository.search(categoryId, brand, specName, specValue);
     }
 
+    /**
+     * C2. A successful lookup raises ProductViewed for the trending list (C3); an unknown product does not.
+     */
     @Transactional(readOnly = true)
     public ProductDetails getProductDetails(String productId) {
         Product product = findProduct(productId);
-        return new ProductDetails(product, inventoryClient.getStockStatus(productId));
+        ProductDetails details = new ProductDetails(product, inventoryClient.getStockStatus(productId));
+        eventPublisher.publishEvent(ProductViewed.of(productId));
+        return details;
     }
 
     public Product createProduct(String name, Float price, String brand, String categoryId,
