@@ -58,7 +58,9 @@ Field names and types follow the [Catalog Service Domain Model](domain-model.md#
 
 > `ProductResponse.stockStatus` (`IN_STOCK` / `OUT_OF_STOCK` / `UNKNOWN`) is set only by `GET /products/{productId}` (C2), from Inventory Service `GET /inventory/{productId}`: `IN_STOCK` when `quantity − reservedQuantity` is greater than 0, otherwise `OUT_OF_STOCK`, and `UNKNOWN` when Inventory Service is unavailable or has no record for the product (NFR-03). It is `null` in list responses (C1, C3) and in C5 responses.
 >
-> `GET /products/{productId}` also publishes `ProductViewed` to Kafka for the trending list (C3); it does not change the product itself.
+> `GET /products/{productId}` also publishes `ProductViewed` to Kafka (topic `catalog-events`) for the trending list (C3), only when the product is found; it does not change the product itself. A failed publish is logged and does not fail the request.
+>
+> `GET /products/trending` (C3) returns at most 10 products (`catalog.trending.size`), ranked by the number of times their details were viewed in the last 24 hours (`catalog.trending.window`): most viewed first; equal counts are ordered by the most recent view, newest first, then by product id. Every view counts. Removed products are left out, so the list can have fewer than 10 products, and it is empty when nothing was viewed in the window. See [Architecture Decision 16](architecture.md#architecture-decisions).
 
 ### Inventory Service (http://localhost:8082/api)
 

@@ -1483,3 +1483,44 @@ Compare all implemented services against specs/, README, and architecture decisi
 **Files created/modified:**
 
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 31
+
+**Date:** 2026-10-14
+
+**Goal:** Record the approved C3 (trending products) decisions in the specs, then implement C3 in catalog-service with tests.
+
+**Exact user prompt:**
+
+````text
+Approved decisions: views only. catalog-events keyed by productId. standard event fields + productId, using Instant; publish only after successful C2 lookup. every view counts. use Spring Kafka @KafkaListener, not Kafka Streams. configurable 24-hour window and top 10. persist views in H2. filter deleted products when reading. return fewer than N or empty list. keep ProductResponse unchanged. Kafka publish failure must not fail C2. when Kafka is disabled process views in-process. use consumer group catalog-service and assume one instance.
+Update the specs first, then implement C3 and its tests. Do not change unrelated features.
+````
+
+**Summary of changes:**
+
+- Specs (written before the code):
+  - `specs/architecture.md`: new Architecture Decision 16 (trending products) with the approved decisions; Kafka Event Contracts gets the `catalog-events` topic (key `productId`, consumer group `catalog-service`), the `ProductViewed` event fields, when it is published, and the "Trending views" processing rule (repeated `eventId` skipped); decision 14 no longer lists C3 as open.
+  - `specs/api-endpoints.md`: C2 note (published only when the product is found, failed publish does not fail the request) and a C3 note (window, size, ordering, removed products, shorter or empty list).
+  - `specs/domain-model.md` 1.5: `ProductViewed` row (only when the product is found; topic `catalog-events`).
+- catalog-service:
+  - `spring-kafka` (+ `spring-kafka-test`); Kafka settings, `catalog.trending.window` (24h) and `catalog.trending.size` (10), `messaging.kafka.enabled` in `application.yml`; tests run with Kafka disabled unless they use an embedded broker.
+  - `ProductViewed` now uses `Instant`; `TrendingProductsCalculator` switched to `Instant` (logic unchanged).
+  - `ProductService.getProductDetails` raises `ProductViewed` after a successful lookup; `GET /products/trending` added to `ProductController`.
+  - New: `TrendingService`, `StoredProductView` + `ProductViewRepository` (H2), `KafkaTopics`, `ProductViewedKafkaPublisher` (after commit, failures logged), `ProductViewedKafkaListener` (group `catalog-service`), `InProcessProductViewRecorder` (Kafka disabled).
+  - Tests: `TrendingProductsTests` (10), `ProductViewedKafkaMessagingTests` (5), `CatalogKafkaIntegrationTests` (2, embedded Kafka), calculator tests moved to `Instant` with one new tie-break test. `TrendingService` is not mocked with Mockito because the JDK in use (26) is not supported by Mockito's Byte Buddy for concrete classes; a recording subclass is used instead.
+  - `catalog-service/README.md`: C3 proposal replaced by the implemented design; status table. Root `README.md`: catalog status and Kafka users.
+- `./mvnw clean test`: all pass (catalog 67, inventory 41, order 54, account 68, recommendation 72).
+
+**Files created/modified:**
+
+- `specs/architecture.md`, `specs/api-endpoints.md`, `specs/domain-model.md`
+- `catalog-service/pom.xml`, `catalog-service/src/main/resources/application.yml`, `catalog-service/src/test/resources/application-test.yml`
+- `catalog-service/src/main/java/com/csci318/catalogservice/domain/{TrendingProductsCalculator,event/ProductViewed}.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/service/{ProductService,TrendingService}.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/infrastructure/{StoredProductView,ProductViewRepository,KafkaTopics,ProductViewedKafkaPublisher,ProductViewedKafkaListener,InProcessProductViewRecorder}.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/presentation/ProductController.java`
+- `catalog-service/src/test/java/com/csci318/catalogservice/{TrendingProductsTests,ProductViewedKafkaMessagingTests,CatalogKafkaIntegrationTests,TrendingProductsCalculatorTests}.java`
+- `catalog-service/README.md`, `README.md`, `PROMPT_HISTORY.md`, `catalog-service/PROMPT_HISTORY.md`

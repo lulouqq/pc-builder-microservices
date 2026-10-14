@@ -6,7 +6,7 @@ CSCI318 Software Engineering Practices & Principles – group project.
 
 | Service | Port | Status | Responsibilities |
 |---|---|---|---|
-| `catalog-service` | 8081 | C1, C2, C4, C5 implemented (with JWT authorisation); C3 pending | products, categories, specifications, prices, product reviews |
+| `catalog-service` | 8081 | C1 - C5 implemented | products, categories, specifications, prices, product reviews |
 | `inventory-service` | 8082 | I1, I3 implemented; I2 subscription only (customer notification pending) | stock, inventory items, stock reservations |
 | `order-service` | 8083 | O1 - O6 and R3 implemented | cart, checkout, orders, order items, order/payment status |
 | `account-service` | 8084 | in progress (A1 - A3 complete) | users, profiles, addresses, preferences |
@@ -40,7 +40,7 @@ Each microservice is structured into four layers (package `com.csci318.<service>
 - Java 21, Apache Maven (multi-module POM)
 - Spring Boot 3.3 (Spring Web, Spring Data JPA)
 - H2 in-memory database for development
-- Apache Kafka with Spring for Apache Kafka (order-service, inventory-service)
+- Apache Kafka with Spring for Apache Kafka (order-service, inventory-service, catalog-service)
 
 ## Running
 
@@ -64,7 +64,7 @@ H2 console (catalog-service): http://localhost:8081/api/h2-console (JDBC URL `jd
 
 ### Kafka
 
-order-service and inventory-service exchange events through Apache Kafka (see [Kafka Event Contracts](specs/architecture.md#kafka-event-contracts)). Start a local broker on `localhost:9092` before running them:
+order-service and inventory-service exchange events through Apache Kafka, and catalog-service uses it for the trending list (see [Kafka Event Contracts](specs/architecture.md#kafka-event-contracts)). Start a local broker on `localhost:9092` before running them:
 
 ```bash
 docker compose up -d

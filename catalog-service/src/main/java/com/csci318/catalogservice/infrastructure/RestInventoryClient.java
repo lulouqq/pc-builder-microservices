@@ -16,10 +16,8 @@ import java.time.Duration;
 /**
  * Calls Inventory Service {@code GET /inventory/{productId}} over REST.
  *
- * PROVISIONAL CONTRACT: the specs do not define the fields of InventoryResponse. This class assumes
- * {@code quantity} and {@code reservedQuantity} (the InventoryItem fields in the domain model) and
- * must be confirmed against the Inventory Service implementation. The assumption is kept in this
- * class only.
+ * Reads {@code quantity} and {@code reservedQuantity} from InventoryResponse
+ * (specs/api-endpoints.md, Inventory Service DTOs); available stock is {@code quantity - reservedQuantity}.
  */
 @Component
 public class RestInventoryClient implements InventoryClient {
@@ -59,7 +57,7 @@ public class RestInventoryClient implements InventoryClient {
     }
 
     /**
-     * Provisional view of Inventory Service's InventoryResponse; other fields are ignored.
+     * Inventory Service's InventoryResponse; only these fields are used.
      */
     record InventoryResponse(Integer quantity, Integer reservedQuantity) {
     }

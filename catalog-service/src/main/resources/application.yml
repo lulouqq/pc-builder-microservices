@@ -19,6 +19,14 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      auto-offset-reset: earliest
+    producer:
+      properties:
+        # do not block a request for long when the broker is down
+        max.block.ms: 1000
 
 # Inventory Service REST call for product stock status (C2)
 inventory-service:
@@ -31,3 +39,16 @@ inventory-service:
 security:
   jwt:
     secret: ${JWT_SECRET}
+
+# Trending products (C3, Architecture Decision 16): the top `size` products by number of views
+# in the last `window`.
+catalog:
+  trending:
+    window: ${TRENDING_WINDOW:24h}
+    size: ${TRENDING_SIZE:10}
+
+# Kafka messaging (Architecture Decisions 14 and 16). Set KAFKA_ENABLED=false to run without a broker:
+# product views are then recorded in-process.
+messaging:
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}

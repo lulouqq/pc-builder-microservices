@@ -84,7 +84,7 @@
 | ProductUpdated | `PUT /products/{productId}` (C5) | productId, name, price, brand, categoryId | No |
 | ProductRemoved | `DELETE /products/{productId}` (C5) | productId | No |
 | ProductReviewed | `POST /products/{productId}/reviews` (C4) | reviewId, productId, userId, rating | No |
-| ProductViewed | `GET /products/{productId}` (C2) | productId | Yes |
+| ProductViewed | `GET /products/{productId}` (C2), when the product is found | productId | Yes (topic `catalog-events`) |
 
 Every event also carries `occurredAt` (DateTime). `ProductCreated`, `ProductUpdated`, `ProductRemoved` and `ProductReviewed` are domain events internal to Catalog Service. `ProductViewed` is the only Catalog event published to Kafka; Catalog Service consumes it to maintain the trending list (C3) — see [Architecture Decisions](architecture.md#architecture-decisions).
 

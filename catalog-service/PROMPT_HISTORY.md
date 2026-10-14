@@ -214,3 +214,41 @@ Fix only the confirmed Catalog blockers from the audit: JWT security/authorizati
 - `catalog-service/src/test/java/com/csci318/catalogservice/TestTokens.java` (new)
 - `catalog-service/src/test/java/com/csci318/catalogservice/{CatalogManagementTests,CatalogServiceApplicationTests,ProductBrowsingTests,ProductDetailsTests,ProductReviewTests}.java`
 - `catalog-service/README.md`, `README.md`, `catalog-service/PROMPT_HISTORY.md`
+
+---
+
+## Prompt 6
+
+**Date:** 2026-10-14
+
+**Goal:** Implement C3 (trending products) after the approved decisions were added to the specs.
+
+This prompt also changed shared specs, so the full entry (exact prompt, summary, files) is recorded as **Prompt 31** in the root [`PROMPT_HISTORY.md`](../PROMPT_HISTORY.md).
+
+---
+
+## Prompt 7
+
+**Date:** 2026-10-14
+
+**Goal:** Two small cleanups: shorter Kafka producer blocking time, and removal of the outdated "provisional Inventory contract" wording.
+
+**Exact user prompt:**
+
+````text
+make two small cleanup changes only: reduce Catalog Kafka producer max.block.ms from 5000 to 1000, and remove the outdated “provisional Inventory contract” wording/comments from the Catalog README and RestInventoryClient. Then run the full build. Do not change C3 behaviour.
+````
+
+**Summary of changes:**
+
+- `application.yml`: `spring.kafka.producer.properties.max.block.ms` 5000 → 1000, so a `GET /products/{productId}` waits at most about 1 s for Kafka when the broker is down.
+- `README.md` (C2 section): "Assumptions to confirm with the Inventory Service team" replaced by the agreed Inventory contract with references to `specs/api-endpoints.md` and Architecture Decisions 8 and 13; the "only RestInventoryClient needs to change" note removed.
+- `RestInventoryClient`: "PROVISIONAL CONTRACT" class comment and "Provisional view" record comment replaced by references to the specified InventoryResponse. No code changes.
+- No C3 or other behaviour changed. `./mvnw clean install`: all tests pass (catalog 67, inventory 41, order 54, account 68, recommendation 72).
+
+**Files created/modified:**
+
+- `catalog-service/src/main/resources/application.yml`
+- `catalog-service/README.md`
+- `catalog-service/src/main/java/com/csci318/catalogservice/infrastructure/RestInventoryClient.java`
+- `catalog-service/PROMPT_HISTORY.md`
