@@ -236,9 +236,9 @@ Operations that are not valid for the current status are rejected with `OrderSta
 |---|---|---|---|
 | id | String | Unique identifier of each build request | Primary Identifier |
 | userId | String | Identifier of the user requesting the PC build | Required |
-| budget | Float | Maximum budget for the requested PC build | Required |
-| purpose | String | Intended use of the PC, such as gaming, work, or content creation | Required |
-| preferences | String | Additional user preferences for the PC build | Optional |
+| budget | Float | Maximum budget for the requested PC build | Required, greater than 0 |
+| purpose | String | Intended use of the PC, such as gaming, work, or content creation | Required, not blank |
+| preferences | String | Additional user preferences for the PC build, as given in the current request (R1). The preference saved in Account Service (A3) is not stored here; it is only extra context for the LLM | Optional |
 
 ### 5.2 PCBuild
 
@@ -255,7 +255,7 @@ Operations that are not valid for the current status are rejected with `OrderSta
 |---|---|---|---|
 | id | String | Unique identifier of each build component | Primary Identifier |
 | productId | String | Identifier of the product selected for the PC build | Required |
-| componentType | String | Type of PC component, such as CPU, GPU, RAM or motherboard | Required |
+| componentType | String | Type of PC component: one of the canonical component types in 5.5 (CPU, Motherboard, RAM, GPU, Storage, PSU, Case) | Required |
 | price | Float | Price of the component when the build was generated | Required |
 
 ### 5.4 Recommendation
@@ -266,4 +266,37 @@ Operations that are not valid for the current status are rejected with `OrderSta
 | buildId | String | Identifier of the PC build associated with the recommendation | Required |
 | reasoning | String | AI-generated explanation of why the selected PC build is suitable for the user's requirements | Required |
 
+### 5.5 Component Types and Compatibility Rules
+
+**Canonical component types.** A product's component type is the name of its Catalog category. The canonical category names are:
+
+`CPU`, `Motherboard`, `RAM`, `GPU`, `Storage`, `PSU`, `Case`
+
+Catalog products used for recommendations must be in a category with one of these names. A generated build (R1) contains exactly one product of each of the seven types.
+
+**Compatibility specification names.** Catalog products use these specification names (Catalog `Specification.name`) for compatibility checks:
+
+| Specification name | Used on |
+|---|---|
+| Socket | CPU, Motherboard |
+| Memory Type | RAM, Motherboard |
+| Form Factor | Motherboard, Case |
+
+**Compatibility rules (R1, R2).** Compatibility is checked with deterministic rules; a conflict is reported when the two products' values for the specification differ. R1 checks the generated build with the same rules as R2.
+
+| Rule | Components | Specification |
+|---|---|---|
+| 1 | CPU ↔ Motherboard | Socket |
+| 2 | RAM ↔ Motherboard | Memory Type |
+| 3 | Motherboard ↔ Case | Form Factor |
+
+There is no power (wattage) rule.
+
+- A rule is checked only when both of its component types are among the selected products; otherwise it is skipped and is not a conflict.
+- When both component types are present but one of the products has no value for the rule's specification, the components are not compatible (`compatible` = `false`) and the conflict's message says which specification is missing.
+- Values are compared after trimming surrounding whitespace, ignoring case. Values are not interpreted (e.g. `ATX` and `Micro-ATX` are just different values); Catalog demo data must use one canonical value per specification for compatible parts.
+- In R2, at most one product per component type may be selected, and every product must be in a canonical category; otherwise the request is rejected with `ValidationFailed` (400). R2 does not create a PCBuild or BuildComponents and stores nothing.
+
 ![Recommendation service domain model](images/domain-model-recommendation.png)
+
+> Note: BuildRequest and PCBuild are separate aggregate roots, as in the table at the top of this document: BuildRequest is what the customer asked for, PCBuild is the build the AI generated. The diagram's composition between BuildRequest and PCBuild is out of date.

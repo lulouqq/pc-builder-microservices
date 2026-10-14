@@ -995,3 +995,160 @@ Don't implement A3 yet. This step is only for updating the API spec and recordin
 
 - `specs/api-endpoints.md`
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 20
+
+**Date:** 2026-10-14
+
+**Goal:** Record the agreed Recommendation Service decisions in the specs (DTOs, error handling, component types, compatibility rules, data access). Specs only — no implementation.
+
+**Exact user prompt:**
+
+````text
+Update the Recommendation specs only, no implementation yet.
+Add Recommendation DTOs to specs/api-endpoints.md based on our decisions: R1/R3/R4 response should include recommendationId, buildId, userId, budget, purpose, preferences, totalPrice, description, reasoning, and components[] with productId, componentType, price. R2 request is productIds[], response is compatible + conflicts[].
+Record these decisions too: Catalog unavailable → 503, empty R2 product list → 400, unknown productId → 404, Inventory 404 means unavailable/out of stock, Inventory unavailable → 503.
+Define canonical component categories: CPU, Motherboard, RAM, GPU, Storage, PSU, Case.
+Define compatibility spec names: Socket, Memory Type, Form Factor.
+R2 deterministic checks: CPU↔Motherboard Socket, RAM↔Motherboard Memory Type, Motherboard↔Case Form Factor. No wattage rule for now.
+Use GET /products and map locally; Recommendation calls Inventory directly for stock.
+Add the decisions to root PROMPT_HISTORY.md. Don’t implement Recommendation yet. Don’t commit or push.
+````
+
+**Decisions** (this prompt, plus RD1–RD8 from `recommendation-service/PROMPT_HISTORY.md` Prompt 2):
+
+| # | Decision |
+|---|---|
+| R-D1 | `BuildRecommendationRequest` = `userId, budget, purpose, preferences?`. |
+| R-D2 | `RecommendationResponse` (R1, R3, R4) = `recommendationId, buildId, userId, budget, purpose, preferences, totalPrice, description, reasoning, components[{productId, componentType, price}]`. R4 returns an array of it. |
+| R-D3 | `CompatibilityRequest` = `productIds[]`; `CompatibilityResponse` = `compatible, conflicts[]`. R2 always returns 200 (`compatible: true`, or `false` + conflicts); `CompatibilityConflict` (409) is not used by R2. |
+| R-D4 | Errors: empty R2 product list → 400 `ValidationFailed`; unknown `productId` → 404 `ResourceNotFound`; Account, Catalog or Inventory unavailable → 503 `ServiceUnavailable`; Inventory 404 (no record) → product not available. |
+| R-D5 | Canonical component categories (Catalog category names = `componentType`): CPU, Motherboard, RAM, GPU, Storage, PSU, Case. |
+| R-D6 | Compatibility spec names: Socket, Memory Type, Form Factor. |
+| R-D7 | R2 deterministic rules: CPU ↔ Motherboard `Socket`, RAM ↔ Motherboard `Memory Type`, Motherboard ↔ Case `Form Factor`. No wattage rule. |
+| R-D8 | Recommendation reads products with Catalog `GET /products` and maps them locally (not `GET /products/{productId}`); it calls Inventory `GET /inventory/{productId}` directly for stock. Only in-stock products can be recommended. |
+| R-D9 | R1 AI flow: Java collects saved Account preference + request preference (separate inputs, request wins), Catalog products and stock; LangChain4j sends the context to the LLM, which returns product IDs + reasoning; Java re-checks IDs, prices (from Catalog), budget and stock. No tool-calling for now. Provider/model/API key from config/env; tests mock the LLM. |
+| R-D10 | BuildRequest and PCBuild stay separate aggregate roots; the domain-model diagram's composition is out of date. |
+| R-D11 | `BuildRequested`, `RecommendationGenerated`, `CompatibilityChecked` are internal domain events (no Kafka). R1/R3/R4 protected (owner), R2 public. |
+
+**Summary of changes:**
+
+- `specs/api-endpoints.md`: new "Recommendation Service DTOs" table (R-D1–R-D3) and notes on R2 status codes, data access, stock and 503 handling (R-D3, R-D4, R-D8).
+- `specs/domain-model.md`: `BuildComponent.componentType` now refers to the canonical types; new section 5.5 "Component Types and Compatibility Rules" (R-D5–R-D7); note that BuildRequest/PCBuild are separate aggregate roots and the diagram is out of date (R-D10).
+- `specs/architecture.md`: Architecture Decision 12 (R-D4, R-D8, R-D9, R-D11).
+- `specs/user-stories.md`: note under R2 that step 3 uses deterministic rules, not the AI agent; story text unchanged.
+- Assumption added to the spec: each `conflicts[]` item is `{specName, productIds, message}` (structure was not specified).
+- No implementation changes.
+
+**Open issues (not decided, not in specs):**
+
+- R2 rule edge cases: a rule whose two component types are not both in the request; a product missing the spec; several products of one type; products outside the canonical categories; value comparison exact or case-insensitive; a case that supports several form factors.
+- R1: which component types are required (all seven? GPU optional?); error when no valid build fits the budget or when the LLM fails/times out; request validation (budget > 0, purpose non-blank).
+- Whether `BuildRequest.preferences` stores only the request preference (assumed) or also the saved Account preference.
+- R4 order: no `createdAt` on BuildRequest/Recommendation.
+- `CompatibilityConflict` (409) is now used by no endpoint; FR-19 is tagged "agentic AI" while R2 is now deterministic.
+- User Story Mapping still lists PCBuild/BuildComponent for R2 although R2 has no BuildRequest to attach a PCBuild to.
+- Recommendation domain-model diagram to be updated; Catalog demo data must use the canonical category and spec names.
+
+**Files created/modified:**
+
+- `specs/api-endpoints.md`
+- `specs/domain-model.md`
+- `specs/architecture.md`
+- `specs/user-stories.md`
+- `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 21
+
+**Date:** 2026-10-14
+
+**Goal:** Resolve the Recommendation open issues from Prompt 20 (R2 rule edge cases, R1 validation and errors, stored preference, R4 order, R2 persistence) and record them in the specs. Specs only — no implementation.
+
+**Exact user prompt:**
+
+````text
+If for one compatibility rule is missing one of the two component types - skip the rule, its not a conflict. If both components exist, but one is missing the required specification - compatible:false, conflict with message about missing specification. Two products with same canonical type - 400 ValidationFailed. Product is outside the canonical categories - 400 ValidationFailed. Compare specification values using trim + case-insensitive matching. For now not trying to parse ATX / mATX and other free-text values: demo Catalog data must use one canonical value. R1 needs all 7 types: CPU, Motherboard, RAM, GPU, Storage, PSU, Case. budget > 0, purpose non-blank, preferences optional. If its not possible to make valid build within the budget - use 409 CompatibilityConflict. LLM timeout/error - 503 ServiceUnavailable. In BuildRequest.preferences store only preference from current request, the saved Account preference is used only as additional LLM context. R4 for now without guaranteed sort order. R2 not using PCBuild and saves nothing. FR-19 keep the same for now: AI is still in R1 and R2 does not use PCBuild and persists nothing. Update the relevant specs and root PROMPT_HISTORY.md with these decisions. Do not implement Recommendation yet. Do not commit or push.
+````
+
+**Decisions:**
+
+| # | Decision |
+|---|---|
+| R-D12 | A compatibility rule whose two component types are not both selected is skipped (not a conflict). |
+| R-D13 | Both component types present but one product lacks the rule's specification → `compatible: false`, with a conflict whose message names the missing specification. |
+| R-D14 | R2: two products of the same canonical type → 400 `ValidationFailed`; a product outside the canonical categories → 400 `ValidationFailed`. |
+| R-D15 | Specification values are compared with trim + case-insensitive matching; values are not parsed (no ATX/mATX logic). Catalog demo data must use one canonical value per specification. |
+| R-D16 | An R1 build needs all seven types: CPU, Motherboard, RAM, GPU, Storage, PSU, Case. |
+| R-D17 | R1 validation: `budget` > 0, `purpose` not blank, `preferences` optional (else 400 `ValidationFailed`). |
+| R-D18 | No valid build possible within the budget → 409 `CompatibilityConflict`. LLM error or timeout → 503 `ServiceUnavailable`. |
+| R-D19 | `BuildRequest.preferences` stores only the current request's preference; the saved Account preference is only extra LLM context. |
+| R-D20 | R4 has no guaranteed sort order for now. |
+| R-D21 | R2 does not use PCBuild and stores nothing. FR-19 stays unchanged; the AI is used in R1. |
+
+**Summary of changes:**
+
+- `specs/api-endpoints.md`: R2 note adds the 400 cases and "stores nothing" (R-D14, R-D21); new R1 note on validation, stored preference, 409 and 503 (R-D16–R-D19); R4 note on order (R-D20). Error contract: `CompatibilityConflict` meaning changed to "no valid PC build can be generated (R1); not used by R2" (R-D18); `ServiceUnavailable` also covers Recommendation LLM calls (R-D18).
+- `specs/domain-model.md`: BuildRequest constraints `budget` > 0, `purpose` not blank, `preferences` = request preference only (R-D17, R-D19); section 5.5 adds the seven-type build, rule skipping, missing-specification conflict, trim + case-insensitive comparison, canonical demo values, and the R2 400 cases (R-D12–R-D16, R-D21).
+- `specs/architecture.md`: Decision 12 adds R1 503 (LLM) / 409 (no valid build), and R2 uses no LLM and stores nothing.
+- `specs/user-stories.md`: R2 mapping is now `Product, Specification` (was `PCBuild, BuildComponent, Product, Specification`); R2 note says the AI is used in R1 and R2 stores nothing. Story text and `requirements.md` (FR-19) unchanged.
+- Assumption added to the spec: the R2 compatibility rules also apply to the build generated in R1 ("valid build" = compatible, in stock, within budget), since a failure is reported as `CompatibilityConflict`.
+- No implementation changes.
+
+**Still open:**
+
+- R1: whether an invalid LLM answer (unknown IDs, over budget, incompatible) is retried, or returned directly as 409/503.
+- FR-19 is still tagged "agentic AI" although R2 is rule-based (kept on purpose for now).
+- LLM provider/model (depends on the API key); Recommendation domain-model diagram update; Catalog demo data with canonical categories, spec names and values.
+
+**Files created/modified:**
+
+- `specs/api-endpoints.md`
+- `specs/domain-model.md`
+- `specs/architecture.md`
+- `specs/user-stories.md`
+- `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 22
+
+**Date:** 2026-10-14
+
+**Goal:** Decide how R1 validates the LLM answer (compatibility rules, retry) and record it in the specs. Specs only — no implementation.
+
+**Exact user prompt:**
+
+````text
+R1 must use the same compatibility rules as R2.
+If the LLM output is invalid, retry once with the validation feedback. If the second result is also invalid, return 409 CompatibilityConflict.
+If the LLM call fails technically or times out, return 503 ServiceUnavailable.
+Update the relevant specs and root PROMPT_HISTORY.md. Do not implement anything yet. Do not commit or push.
+````
+
+**Decisions:**
+
+| # | Decision |
+|---|---|
+| R-D22 | R1 checks the generated build with the same compatibility rules as R2 (confirms the Prompt 21 assumption). |
+| R-D23 | Invalid LLM answer → one retry with the validation errors as feedback; second answer also invalid → 409 `CompatibilityConflict`. |
+| R-D24 | LLM technical failure or timeout (on either call) → 503 `ServiceUnavailable`. |
+
+**Summary of changes:**
+
+- `specs/api-endpoints.md`: R1 note lists what makes an LLM answer valid (product IDs exist and are in stock, exactly one product per component type, R2 compatibility rules, Catalog total price within budget), the single retry with feedback, 409 after the second invalid answer, and 503 on technical failure/timeout. This replaces the earlier "no valid build can be made" wording.
+- `specs/domain-model.md`: section 5.5 rules heading is now "Compatibility rules (R1, R2)"; R1 uses the same rules.
+- `specs/architecture.md`: Decision 12 adds the compatibility re-check and the retry-once rule.
+- No implementation changes.
+
+**Still open:** LLM provider/model (depends on the API key); Recommendation domain-model diagram update; Catalog demo data with canonical categories, spec names and values; FR-19 "agentic AI" tag kept on purpose for now.
+
+**Files created/modified:**
+
+- `specs/api-endpoints.md`
+- `specs/domain-model.md`
+- `specs/architecture.md`
+- `PROMPT_HISTORY.md`
