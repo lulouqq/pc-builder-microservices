@@ -133,6 +133,27 @@ Field names and types follow [Preference](domain-model.md#43-preference).
 | R3 | GET | /recommendations/{recommendationId} | None | 200 OK (RecommendationResponse) | View a generated recommendation and its individual components |
 | R4 | GET | /users/{userId}/recommendations | None | 200 OK (Array\<RecommendationResponse\>) | Retrieve a customer's previous PC build recommendations |
 
+#### Recommendation Service DTOs
+
+Field names and types follow the [Recommendation Service Domain Model](domain-model.md#5-recommendation-service-domain-model).
+
+| DTO | Fields |
+|---|---|
+| BuildRecommendationRequest | userId, budget, purpose, preferences (optional) |
+| RecommendationResponse | recommendationId, buildId, userId, budget, purpose, preferences, totalPrice, description, reasoning, components (Array of {productId, componentType, price}) |
+| CompatibilityRequest | productIds (Array of String) |
+| CompatibilityResponse | compatible (Boolean), conflicts (Array of {specName, productIds, message}) |
+
+> `RecommendationResponse` combines the BuildRequest (`userId`, `budget`, `purpose`, `preferences`), the PCBuild (`buildId`, `totalPrice`, `description`, `components`) and the Recommendation (`recommendationId`, `reasoning`). R1, R3 and R4 return the same DTO; R4 returns one per previous build request.
+>
+> `POST /compatibility/validate` (R2) always returns 200 when the check can be made: `compatible` = `true` with an empty `conflicts` list, or `compatible` = `false` with the conflicts found by the rules in [Component Types and Compatibility Rules](domain-model.md#55-component-types-and-compatibility-rules). It does not return `CompatibilityConflict` (409). An empty or missing `productIds` list, two products with the same component type, or a product whose category is not a canonical component type returns `ValidationFailed` (400); a `productId` that is not in the catalog returns `ResourceNotFound` (404). R2 does not create a PCBuild and stores nothing.
+>
+> `POST /recommendations` (R1) returns `ValidationFailed` (400) when `budget` is missing or not greater than 0, or `purpose` is missing or blank; `preferences` is optional. The response's `preferences` is the preference from the request (the saved Account preference is only extra context for the LLM and is not stored). Recommendation Service validates the LLM's answer: every product ID exists in the catalog and is in stock, there is exactly one product of each of the seven component types, the build passes the same compatibility rules as R2, and the total price (from Catalog) is within the budget. If the answer is invalid, the LLM is asked once more with the validation errors; if the second answer is also invalid, R1 returns `CompatibilityConflict` (409). When an LLM call fails technically or times out, R1 returns `ServiceUnavailable` (503).
+>
+> `GET /users/{userId}/recommendations` (R4) does not guarantee any order.
+>
+> Recommendation Service reads products with Catalog `GET /products` and maps them locally (component type from the category name via `GET /categories`); it does not call `GET /products/{productId}`. It checks stock by calling Inventory `GET /inventory/{productId}` directly. Only in-stock products can be recommended (R1); a 404 from Inventory (no inventory record) means the product is not available. When Account Service (R1 preferences), Catalog Service (R1, R2) or Inventory Service (R1) is unavailable, the request fails with `ServiceUnavailable` (503). See [Architecture Decision 12](architecture.md#architecture-decisions).
+
 ### Endpoint Naming and Contract Rules
 
 - All REST endpoints use the `/api` base.
@@ -181,7 +202,7 @@ Agreed design for A2 / NFR-04 ([Architecture Decision 11](architecture.md#archit
 | StockUnavailable | 409 Conflict | Inventory, Order | Requested quantity cannot be reserved because insufficient stock is available |
 | ReservationConflict | 409 Conflict | Inventory | Stock reservation is invalid, expired, or cannot be modified |
 | OrderStateViolation | 409 Conflict | Order | Requested operation is not valid for the current order state |
-| CompatibilityConflict | 409 Conflict | Recommendation | Selected components contain compatibility conflicts |
+| CompatibilityConflict | 409 Conflict | Recommendation | No valid PC build (compatible, in stock, within the budget) can be generated for the request (R1); not used by `POST /compatibility/validate` |
 | CategoryInUse | 409 Conflict | Catalog | Category still has products and cannot be removed |
 | InternalServiceError | 500 Internal Server Error | All services | Unexpected service-side failure |
-| ServiceUnavailable | 503 Service Unavailable | Inter-service operations | Required downstream service is temporarily unavailable |
+| ServiceUnavailable | 503 Service Unavailable | Inter-service operations, Recommendation LLM calls | Required downstream service or the LLM provider is temporarily unavailable or timed out |

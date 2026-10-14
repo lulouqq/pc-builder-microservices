@@ -26,7 +26,7 @@
 | A2: Authenticate Customer | User | None |
 | A3: Save Recommendation Preferences | User, Preference | PreferenceUpdated |
 | R1: Generate Recommended PC Build | BuildRequest, PCBuild, BuildComponent, Recommendation | BuildRequested, RecommendationGenerated |
-| R2: Validate Component Compatibility | PCBuild, BuildComponent, Product, Specification | CompatibilityChecked |
+| R2: Validate Component Compatibility | Product, Specification | CompatibilityChecked |
 | R3: Add Recommended Build to Cart | PCBuild, BuildComponent, Order, OrderItem | None |
 | R4: View Previous Recommendations | BuildRequest, PCBuild, Recommendation | None |
 
@@ -247,6 +247,8 @@ As a Customer, I want my selected PC components to be checked for compatibility,
 2. Recommendation Service retrieves relevant component specifications.
 3. The AI agent evaluates compatibility between the components.
 4. Any identified compatibility conflicts are reported to the customer.
+
+> Note: in the agreed design, step 3 is done with deterministic rules (CPU ↔ Motherboard `Socket`, RAM ↔ Motherboard `Memory Type`, Motherboard ↔ Case `Form Factor`), not by the AI agent; the AI agent is used in R1. R2 does not create a PCBuild and stores nothing — see [Component Types and Compatibility Rules](domain-model.md#55-component-types-and-compatibility-rules) and [Architecture Decision 12](architecture.md#architecture-decisions).
 
 ### R3: Add Recommended Build to Cart
 
