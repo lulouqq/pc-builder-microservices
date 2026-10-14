@@ -72,6 +72,16 @@ Field names and types follow the [Catalog Service Domain Model](domain-model.md#
 
 > In the normal order flow, stock is reserved and released through Kafka events (`OrderPlaced` / `OrderCancelled`), not through these REST endpoints. The I1 REST endpoints are kept for direct use and testing — see [Architecture Decisions](architecture.md#architecture-decisions).
 
+#### Inventory Service DTOs (I3)
+
+Field names and types follow [InventoryItem](domain-model.md#21-inventoryitem).
+
+| DTO | Fields |
+|---|---|
+| InventoryResponse | productId, quantity, reservedQuantity |
+
+> Available stock is `quantity − reservedQuantity`; a product is in stock when it is greater than 0. Catalog Service (C2 `stockStatus`) and Recommendation Service (R1) read `GET /inventory/{productId}` with this contract.
+
 ### Order Service (http://localhost:8083/api)
 
 | Feature | Method | Endpoint Path | Request Body | Response (Success) | Description |
@@ -152,7 +162,7 @@ Field names and types follow the [Recommendation Service Domain Model](domain-mo
 >
 > `GET /users/{userId}/recommendations` (R4) does not guarantee any order.
 >
-> Recommendation Service reads products with Catalog `GET /products` and maps them locally (component type from the category name via `GET /categories`); it does not call `GET /products/{productId}`. It checks stock by calling Inventory `GET /inventory/{productId}` directly. Only in-stock products can be recommended (R1); a 404 from Inventory (no inventory record) means the product is not available. When Account Service (R1 preferences), Catalog Service (R1, R2) or Inventory Service (R1) is unavailable, the request fails with `ServiceUnavailable` (503). See [Architecture Decision 12](architecture.md#architecture-decisions).
+> Recommendation Service reads products with Catalog `GET /products` and maps them locally (component type from the category name via `GET /categories`); it does not call `GET /products/{productId}`. It checks stock by calling Inventory `GET /inventory/{productId}` directly. Only in-stock products can be recommended (R1); a 404 from Inventory (no inventory record) means the product is not available. When Account Service (R1 preferences), Catalog Service (R1, R2) or Inventory Service (R1) is unavailable, returns a 5xx response or times out, the request fails with `ServiceUnavailable` (503). Errors from Account Service's `GET /users/{userId}/preferences` in R1 are passed on: 401 → `AuthenticationRequired` (401), 403 → `AccessDenied` (403), 404 → `ResourceNotFound` (404). See [Architecture Decision 12](architecture.md#architecture-decisions).
 
 ### Endpoint Naming and Contract Rules
 

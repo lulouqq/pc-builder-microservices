@@ -204,3 +204,122 @@ Before implementing Recommendation, inspect the current Catalog API and DTOs and
 **Files created/modified:**
 
 - `recommendation-service/PROMPT_HISTORY.md`
+
+---
+
+## Prompt 3
+
+**Date:** 2026-10-14
+
+**Goal:** Implement recommendation-service (R1–R4) following the agreed specs (root `PROMPT_HISTORY.md` Prompts 20–22, Architecture Decision 12, domain-model.md 5.5).
+
+**Exact user prompt:**
+
+````text
+Start the implementation. 
+Create Maven module/skeleton on 8085, /api. 
+Implement domain: BuildRequest, PCBuild, BuildComponent, Recommendation. R1/R2/R3/R4. 
+REST clients for Account, Catalog and Inventory.
+JWT rules.
+deterministic compatibility checker.
+LLM abstraction using LangChain4j.
+Keep the LLM provider and model configurable through environment/config. Do not hardcode API keys or require a real API key for tests.
+One retry for invalid LLM output.
+Persistence in H2.
+Internal events, without Kafka.
+Mocked LLM/downstream services in tests.
+README + service prompt history.
+Account/catalog/inventory/order don't change code.
+Full Maven build.
+You may update the root pom.xml to add recommendation-service as a Maven module.
+No commit/push
+````
+
+**Summary of changes:**
+
+- **Module:** `recommendation-service` Maven module (Spring Web, Data JPA, H2, Security + OAuth2 resource server, `langchain4j-open-ai` 1.4.0), registered in the root `pom.xml`. Port 8085, context path `/api`, H2 `recommendationdb`. Jackson set to 2.19.2 in this module only (the version LangChain4j 1.4.0 is built with; Spring Boot 3.3.2 manages 2.17).
+- **Domain:** aggregate roots `BuildRequest` (validation: userId, budget > 0, purpose not blank; blank preferences → null) and `PCBuild` (owns `BuildComponent`s with `@OrderColumn` and its 0..1 `Recommendation`; total price = sum of component prices). `ComponentType` enum (seven canonical types, matched from category names trimmed/ignoring case). `CompatibilityChecker` domain service + `CompatibilityRule` (Socket, Memory Type, Form Factor), `SelectedComponent`, `CompatibilityConflict`, `CompatibilityResult`. Internal events `BuildRequested`, `RecommendationGenerated`, `CompatibilityChecked` (Spring application events, no Kafka).
+- **Service:** `RecommendationService` — R1 (owner check, validation, saved preference, catalog + stock, fail-fast 409 when a type has no in-stock product or the cheapest build is over budget, LLM proposal, `BuildProposalValidator` re-check, one retry with the problems, 409 after the second invalid answer, store in one transaction only on success, publish events), R3 (404 unknown, 403 other user), R4 (no guaranteed order). `CompatibilityService` — R2 (400 empty/blank/duplicate type/non-canonical, 404 unknown product, deterministic check, nothing stored). Ports `AccountClient`, `CatalogClient`, `InventoryClient`, `BuildAdvisor`.
+- **Infrastructure:** `RestAccountClient` (forwards Authorization; 404 → ResourceNotFound, other errors → 503), `RestCatalogClient` (`GET /categories` + `GET /products`, joined locally; never `GET /products/{id}`), `RestInventoryClient` (provisional `quantity`/`reservedQuantity`; 404 → not in stock; failure → 503), all with 2 s timeouts. `LlmConfig` creates an `OpenAiChatModel` only when `LLM_API_KEY` and `LLM_MODEL_NAME` are set (base URL/timeout configurable, `maxRetries(0)`); `LangChain4jBuildAdvisor` builds the prompt (request and saved preference on separate lines), parses the JSON answer (tolerates fences), sends the previous answer + problems on the retry, and maps technical failures and a missing model to 503. `JwtConfig` + `SecurityConfig` as in Account Service: R2 public, `/users/{userId}/**` own user only, everything else needs a token.
+- **Presentation:** `RecommendationController` (R1 201, R3, R4), `CompatibilityController` (R2), DTOs per `specs/api-endpoints.md`, `GlobalExceptionHandler` (400/403/404/409 CompatibilityConflict/503/500) and `SecurityErrorHandler` (401/403), error body `{code, message}` as in Account Service.
+- **Tests (68, all pass):** domain (`CompatibilityCheckerTest`, `BuildAggregatesTest`); REST clients against stub HTTP servers; `LangChain4jBuildAdvisorTest` (mocked `ChatModel`); `LlmConfigTest`; API tests `RecommendationControllerTest` (R1 success/retry/409/503/400/401/403, R3, R4) and `CompatibilityControllerTest` (R2) with mocked `ChatModel` and downstream clients; context test without an LLM key. No API key or running service needed.
+- **Build:** `./mvnw clean verify` — catalog-service 46, account-service 68, recommendation-service 68 tests, BUILD SUCCESS. Smoke run of the jar with only `JWT_SECRET` set: starts; R2 with Catalog down → 503, R1 without token → 401, R2 empty list → 400.
+- README rewritten (status, running, configuration, design, R1 flow, R2 rules, assumptions); root README status cell updated. No code changes in account/catalog/inventory/order.
+
+**Assumptions (not in the specs):**
+
+- Inventory `InventoryResponse` = `quantity`, `reservedQuantity` (provisional, same as Catalog); a response without them → 503.
+- Account 404 → 404 `ResourceNotFound`; other Account errors (incl. 401/403) → 503.
+- R1: blank `userId` → 400, other user's `userId` → 403, both checked before the other fields and before calling Account.
+- Fail-fast 409 before calling the LLM when a component type has no in-stock product or the cheapest build exceeds the budget.
+- Failed R1 calls store nothing; `BuildRequested` is published after the request is stored (successful R1 only).
+- Domain event payload fields as listed in the README.
+- Duplicate specification names on one product: the first value is used.
+- No default LLM model name; R1 returns 503 until `LLM_API_KEY` and `LLM_MODEL_NAME` are set.
+
+**Open issues:**
+
+- Inventory Service contract to confirm; Order Service side of R3 (`POST /orders/from-recommendation/{recommendationId}`) not implemented.
+- Catalog demo data with canonical categories, specification names and values does not exist yet.
+- Not tried against a real LLM API (no key yet); prompt quality is untested.
+- Error body field differs between services: Account/Recommendation use `{code, message}`, Catalog uses `{error, message}`.
+
+**Files created/modified:**
+
+- `pom.xml` (root: added module)
+- `README.md` (root: status cell)
+- `recommendation-service/pom.xml`, `recommendation-service/README.md`, `recommendation-service/PROMPT_HISTORY.md`
+- `recommendation-service/src/main/resources/application.yml`, `recommendation-service/src/test/resources/application-test.yml`
+- `recommendation-service/src/main/java/com/csci318/recommendationservice/**` (application, domain, domain/event, service, infrastructure, presentation)
+- `recommendation-service/src/test/java/com/csci318/recommendationservice/**` (domain, infrastructure, presentation tests and fixtures)
+
+---
+
+## Prompt 4
+
+**Date:** 2026-10-14
+
+**Goal:** Fix the mapping of Account Service errors in R1 and align the Inventory client with the agreed `InventoryResponse` contract (spec change recorded in root `PROMPT_HISTORY.md` Prompt 23).
+
+**Exact user prompt:**
+
+````text
+Fix mapping errors: Account 401 - Recommendation 401 AuthenticationRequired,
+Account 403 - Recommendation 403 AccessDenied,
+Account 404 - Recommendation 404 ResourceNotFound,
+timeout/network/5xx - 503 ServiceUnavailable.
+
+Update the InventoryResponse contract in specs/api-endpoints.md:
+productId,
+quantity,
+reservedQuantity.
+
+Available stock is calculated as quantity - reservedQuantity.
+Update root PROMPT_HISTORY.md.
+Update recommendation-service/PROMPT_HISTORY.md for code fix
+Run Recommendation tests + ./mvnw clean verify.
+Don't touch Account/Catalog/Inventory/Order implementation.
+No commit/push
+````
+
+**Summary of changes:**
+
+- `RestAccountClient`: Account 401 → `AuthenticationRequiredException` (401 `AuthenticationRequired`), 403 → `AccessDeniedException` (403 `AccessDenied`), 404 → `ResourceNotFoundException` (404 `ResourceNotFound`); timeout, network failure, 5xx and any other error response → `ServiceUnavailableException` (503). Previously 401/403 were mapped to 503.
+- New `service/AuthenticationRequiredException`; `GlobalExceptionHandler` maps it to 401 `AuthenticationRequired`. `AccountClient` Javadoc lists the four outcomes.
+- `RestInventoryClient`: `InventoryResponse` now `{productId, quantity, reservedQuantity}` as in the spec; "provisional" comment replaced by a reference to `specs/api-endpoints.md`. Behaviour unchanged.
+- Tests: `RestAccountClientTest` covers 401, 403, 500 and a read timeout (new `StubHttpServer.stubSlow`; the stub server now uses a thread pool); `RecommendationControllerTest.accountErrorsArePassedOn` checks 401/403/404 through the API with nothing stored and no LLM call.
+- README: error mapping and assumptions updated.
+- Tests: `./mvnw -pl recommendation-service test` → 72 tests pass; `./mvnw clean verify` → catalog-service 46, account-service 68, recommendation-service 72, BUILD SUCCESS.
+
+**Files created/modified:**
+
+- `recommendation-service/src/main/java/com/csci318/recommendationservice/service/AuthenticationRequiredException.java` (new)
+- `recommendation-service/src/main/java/com/csci318/recommendationservice/service/AccountClient.java`
+- `recommendation-service/src/main/java/com/csci318/recommendationservice/infrastructure/RestAccountClient.java`
+- `recommendation-service/src/main/java/com/csci318/recommendationservice/infrastructure/RestInventoryClient.java`
+- `recommendation-service/src/main/java/com/csci318/recommendationservice/presentation/GlobalExceptionHandler.java`
+- `recommendation-service/src/test/java/com/csci318/recommendationservice/infrastructure/RestAccountClientTest.java`
+- `recommendation-service/src/test/java/com/csci318/recommendationservice/infrastructure/StubHttpServer.java`
+- `recommendation-service/src/test/java/com/csci318/recommendationservice/presentation/RecommendationControllerTest.java`
+- `recommendation-service/README.md`
+- `recommendation-service/PROMPT_HISTORY.md`

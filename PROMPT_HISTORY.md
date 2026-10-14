@@ -1152,3 +1152,83 @@ Update the relevant specs and root PROMPT_HISTORY.md. Do not implement anything 
 - `specs/domain-model.md`
 - `specs/architecture.md`
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 23
+
+**Date:** 2026-10-14
+
+**Goal:** Define the Inventory `InventoryResponse` contract in the specs and record how Recommendation Service passes on Account Service errors (code fix recorded in `recommendation-service/PROMPT_HISTORY.md` Prompt 4).
+
+**Exact user prompt:**
+
+````text
+Fix mapping errors: Account 401 - Recommendation 401 AuthenticationRequired,
+Account 403 - Recommendation 403 AccessDenied,
+Account 404 - Recommendation 404 ResourceNotFound,
+timeout/network/5xx - 503 ServiceUnavailable.
+
+Update the InventoryResponse contract in specs/api-endpoints.md:
+productId,
+quantity,
+reservedQuantity.
+
+Available stock is calculated as quantity - reservedQuantity.
+Update root PROMPT_HISTORY.md.
+Update recommendation-service/PROMPT_HISTORY.md for code fix
+Run Recommendation tests + ./mvnw clean verify.
+Don't touch Account/Catalog/Inventory/Order implementation.
+No commit/push
+````
+
+**Decisions:**
+
+| # | Decision |
+|---|---|
+| R-D25 | `InventoryResponse` = `productId, quantity, reservedQuantity`. Available stock = `quantity − reservedQuantity` (in stock when > 0). Replaces the provisional assumption in Catalog and Recommendation Service. |
+| R-D26 | Recommendation Service passes on Account Service errors (R1 preference call): Account 401 → 401 `AuthenticationRequired`, 403 → 403 `AccessDenied`, 404 → 404 `ResourceNotFound`; timeout, network failure or 5xx → 503 `ServiceUnavailable`. |
+
+**Summary of changes:**
+
+- `specs/api-endpoints.md`: new "Inventory Service DTOs (I3)" table with `InventoryResponse` (`productId, quantity, reservedQuantity`) and a note that available stock is `quantity − reservedQuantity` and is used by Catalog (C2) and Recommendation (R1).
+- R-D26 is implemented in recommendation-service only; it is not yet written in the specs (the R1 note in `specs/api-endpoints.md` still lists only the 503 case for Account).
+- No Account, Catalog, Inventory or Order implementation changes. Catalog's `RestInventoryClient` still calls its contract "provisional" in comments/README; it already uses `quantity` and `reservedQuantity`.
+
+**Files created/modified:**
+
+- `specs/api-endpoints.md`
+- `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 24
+
+**Date:** 2026-10-14
+
+**Goal:** Write the R1 Account error behaviour (R-D26, Prompt 23) into `specs/api-endpoints.md`. Specs only — no code changes.
+
+**Exact user prompt:**
+
+````text
+In specs/api-endpoints.md update the R1 error behaviour: Account 401 - 401 AuthenticationRequired,
+Account 403 - 403 AccessDenied,
+Account 404 - 404 ResourceNotFound,
+Account unavailable/5xx/timeout - 503 ServiceUnavailable.
+
+Save it into root PROMPT_HISTORY.md. 
+
+Don't change any code.
+
+No commit/push
+````
+
+**Summary of changes:**
+
+- `specs/api-endpoints.md` (Recommendation Service DTOs, data-access note): the 503 sentence now covers unavailable, 5xx and timeout for Account, Catalog and Inventory; a new sentence says that in R1 Account's 401 → `AuthenticationRequired` (401), 403 → `AccessDenied` (403), 404 → `ResourceNotFound` (404). This closes the gap noted in Prompt 23 (R-D26 was implemented but not in the specs).
+- The recommendation-service implementation (`RestAccountClient`, recommendation-service Prompt 4) already behaves this way; no code changes.
+
+**Files created/modified:**
+
+- `specs/api-endpoints.md`
+- `PROMPT_HISTORY.md`

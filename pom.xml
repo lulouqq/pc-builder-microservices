@@ -16,6 +16,7 @@
     <modules>
         <module>catalog-service</module>
         <module>account-service</module>
+        <module>recommendation-service</module>
     </modules>
 
     <parent>
