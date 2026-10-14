@@ -1428,3 +1428,35 @@ Commit current work. Is order and inventory service fully implemented to do a pr
 **Files created/modified:**
 
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 29
+
+**Date:** 2026-10-14
+
+**Goal:** Small specs cleanup before merging PR #8.
+
+**Exact user prompt:**
+
+````text
+Small docs cleanup before merge:
+In specs/api-endpoints.md, remove the duplicated Inventory Service DTOs heading/intro and duplicate InventoryResponse explanation.
+In specs/domain-model.md, show CANCELLED in the order lifecycle, not only DRAFT → PLACED → PROCESSING → COMPLETED.
+Clarify paymentDueAt: it is set when the order becomes PROCESSING to current time + 10 minutes.
+In Kafka docs, clarify that ordering is guaranteed for the same key within each topic/partition, not across different topics.
+No code changes needed.
+````
+
+**Summary of changes:**
+
+- `specs/domain-model.md`: the order lifecycle diagram now shows the cancelled path explicitly (DRAFT / PLACED / PROCESSING -> CANCELLED); `paymentDueAt` is described as set to the current time + 10 minutes when the order becomes PROCESSING (matches `OrderService`).
+- `specs/architecture.md` (Kafka Event Contracts): ordering is guaranteed only for messages with the same key within one topic (same partition), not across topics.
+- `specs/api-endpoints.md`: not changed. It has one "Inventory Service DTOs" heading and one `InventoryResponse` explanation; no duplicate was found (reported to the user).
+- No code changes.
+
+**Files created/modified:**
+
+- `specs/domain-model.md`
+- `specs/architecture.md`
+- `PROMPT_HISTORY.md`

@@ -68,7 +68,7 @@ Agreed contracts for the order flow (decision 14). Library: Spring for Apache Ka
 | `inventory-reservation-events` | `orderId` | `StockReserved`, `StockReservationFailed` | Inventory Service | Order Service (`order-service`) |
 | `inventory-stock-events` | `productId` | `StockChanged` | Inventory Service | none yet |
 
-All events of one order are in one topic with the same key, so they are consumed in the order they were published.
+Kafka keeps the order of messages with the same key within one topic (they go to the same partition), so the events of one order in `order-events` are consumed in the order they were published. There is no ordering guarantee across different topics: for example, an `OrderCancelled` in `order-events` and a `StockReserved` in `inventory-reservation-events` for the same order can be consumed in either order, which is why the repeated-message and status checks below exist.
 
 Every event has the common fields `eventId` (UUID), `eventType`, `version` (integer, currently 1) and `occurredAt` (ISO-8601 UTC timestamp), plus:
 
