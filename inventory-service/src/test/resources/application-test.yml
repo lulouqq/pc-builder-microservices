@@ -1,0 +1,4 @@
+# Test-only value for the secret that the main application.yml reads from an environment variable.
+security:
+  jwt:
+    secret: test-only-jwt-secret-not-for-production-use

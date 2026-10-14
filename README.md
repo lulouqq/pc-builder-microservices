@@ -7,7 +7,7 @@ CSCI318 Software Engineering Practices & Principles – group project.
 | Service | Port | Status | Responsibilities |
 |---|---|---|---|
 | `catalog-service` | 8081 | C1, C4, C5 implemented | products, categories, specifications, prices, product reviews |
-| `inventory-service` | 8082 | placeholder | stock, inventory items, stock reservations |
+| `inventory-service` | 8082 | in progress (I3 and REST side of I1, I2 complete; Kafka pending) | stock, inventory items, stock reservations |
 | `order-service` | 8083 | placeholder | cart, checkout, orders, order items, order/payment status |
 | `account-service` | 8084 | in progress (A1 - A3 complete) | users, profiles, addresses, preferences |
 | `recommendation-service` | 8085 | R1 - R4 implemented | AI-generated PC builds, compatibility checking, previous build requests |

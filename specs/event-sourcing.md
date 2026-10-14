@@ -46,11 +46,15 @@ Example: `InventoryItem:inventory-item-123`
 
 > Quantity effects: `StockReserved` increases `reservedQuantity`; `StockReservationReleased` decreases `reservedQuantity`; `StockReservationConfirmed` decreases both `reservedQuantity` and `quantity` (the reserved stock is sold).
 
-> `InventoryInitialized` is created internally when an inventory record is first created for a product; it is not triggered by an API endpoint or a CQRS command.
+> `InventoryInitialized` is created internally when an inventory record is first created for a product; it is not triggered by an API endpoint or a CQRS command. The record is first created when the first `UpdateStockLevelCommand` arrives for a product that has no inventory record: `InventoryInitialized` (quantity 0, reservedQuantity 0) is recorded, followed by the `StockLevelUpdated` of that command.
+
+> `updateStock(quantity)` sets the absolute quantity; it is rejected (`ValidationFailed`) when the new quantity is negative or lower than `reservedQuantity`. `reason` is optional.
 
 ### 3.4 Derived Events
 
 - `StockLow` - Triggered when available stock falls below the configured threshold.
 - `ProductRestocked` - Triggered when stock becomes available again after previously being unavailable.
+
+> Available stock is `quantity − reservedQuantity`. The low-stock threshold is a configuration value (`inventory.low-stock-threshold`, default 10). `StockLow` is raised when available stock was at or above the threshold and is now below it; `ProductRestocked` when available stock was 0 or less and is now above 0. Derived events are not stored in the event store.
 
 > The `StockChanged` event shown in the [architecture diagram](architecture.md#kafka-flows) is an integration/umbrella event representing inventory stock changes; it may be derived from `StockLevelUpdated`, `StockLow` or `ProductRestocked`.

@@ -72,15 +72,26 @@ Field names and types follow the [Catalog Service Domain Model](domain-model.md#
 
 > In the normal order flow, stock is reserved and released through Kafka events (`OrderPlaced` / `OrderCancelled`), not through these REST endpoints. The I1 REST endpoints are kept for direct use and testing — see [Architecture Decisions](architecture.md#architecture-decisions).
 
-#### Inventory Service DTOs (I3)
+#### Inventory Service DTOs
 
-Field names and types follow [InventoryItem](domain-model.md#21-inventoryitem).
+Field names and types follow the [Inventory Service Domain Model](domain-model.md#2-inventory-service-domain-model).
 
 | DTO | Fields |
 |---|---|
 | InventoryResponse | productId, quantity, reservedQuantity |
+| StockUpdateRequest | quantity (new absolute stock level, 0 or more), reason (optional) |
+| StockReservationRequest | orderId, quantity (1 or more) |
+| StockReservationResponse | id, productId, orderId, quantity, status (`ACTIVE` / `RELEASED` / `CONFIRMED`) |
+| StockNotificationRequest | userId |
+| StockNotificationResponse | id, productId, userId, createdAt |
 
-> Available stock is `quantity − reservedQuantity`; a product is in stock when it is greater than 0. Catalog Service (C2 `stockStatus`) and Recommendation Service (R1) read `GET /inventory/{productId}` with this contract.
+> `InventoryResponse` is the contract read by Catalog Service (C2 `stockStatus`) and Recommendation Service (R1) through `GET /inventory/{productId}`: available stock is `quantity − reservedQuantity`, and a product is in stock when it is greater than 0. `GET /inventory/{productId}` returns `ResourceNotFound` (404) when the product has no inventory record.
+>
+> `PUT /inventory/{productId}` (I3) sets the absolute stock quantity. The first update for a product that has no inventory record creates the record (`InventoryInitialized` with no stock, followed by `StockLevelUpdated`); Inventory Service does not check that the product exists in Catalog Service. `reason` is optional and is recorded in `StockLevelUpdated`. A missing or negative `quantity`, or a `quantity` lower than the reserved quantity, returns `ValidationFailed` (400).
+>
+> `POST /inventory/{productId}/reservations` (I1) returns `StockUnavailable` (409) when `quantity` is greater than the available stock. `DELETE /inventory/{productId}/reservations/{reservationId}` returns `ReservationConflict` (409) when the reservation does not exist for the product or is not `ACTIVE`. Both return `ResourceNotFound` (404) when the product has no inventory record.
+>
+> `POST /inventory/{productId}/notifications` (I2) returns `ResourceNotFound` (404) when the product has no inventory record. Subscribing again with the same `userId` returns the existing subscription.
 
 ### Order Service (http://localhost:8083/api)
 

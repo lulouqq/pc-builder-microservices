@@ -1232,3 +1232,60 @@ No commit/push
 
 - `specs/api-endpoints.md`
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 25
+
+> Recorded as Prompt 23 on `feature/inventory-service` before `origin/main` was merged (renumbered to follow Prompts 23–24 from `main`).
+
+**Date:** 2026-10-14
+
+**Goal:** Project-wide parts of the inventory-service work recorded as Prompt 1 in `inventory-service/PROMPT_HISTORY.md`: record the inventory decisions in the specs, register the module, and record the Kafka library recommendation.
+
+**Exact user prompt:**
+
+````text
+1. Recommendation will expect GET /inventory/{productId} to return productId, quantity, reservedQuantity as the InventoryResponse contract. For the rest, define them as necessary.
+
+2. Create an inventory record automatically when the first stock update arrives for a product without an existing record. Check the requirements and current implementation to see whether this is appropriate. If nothing specifies another initialization mechanism, proceed with this approach and document the assumption.
+
+3. Set absolute quantity for stock. Reason is a request field if the system needs to record why stock changed; otherwise, don't require it. Reject updates where the new quantity would be lower than the reserved quantity.
+
+4. Use a consistent error response body of { "error": "ERROR_CODE", "message": "Human-readable explanation" } across the inventory service. Check the existing services and API conventions first, and align with the established format if one already exists. Keep HTTP status codes appropriate to each error.
+
+5. Use a configurable low-stock threshold, with a default value of 10 units unless the existing requirements or configuration specify otherwise. Publish StockLow when the available stock (quantity - reservedQuantity) falls below the configured threshold. Document the assumption and avoid hardcoding the threshold in business logic.
+
+For Kafka Side gaps:
+Apache Kafka is a project requirement. Use Apache Kafka for asynchronous communication between microservices. Check the existing dependencies and configuration to determine the appropriate Kafka integration library. 
+For rest of the gaps, check if implementing Order service will better to resolve those gaps. I am building order service as well.
+````
+
+**Decisions:**
+
+| # | Decision |
+|---|---|
+| I-D1 | `InventoryResponse` = `productId, quantity, reservedQuantity`. Other Inventory DTOs: `StockUpdateRequest` (quantity, reason?), `StockReservationRequest` (orderId, quantity), `StockReservationResponse` (id, productId, orderId, quantity, status), `StockNotificationRequest` (userId), `StockNotificationResponse` (id, productId, userId, createdAt). |
+| I-D2 | An inventory record is created automatically by the first stock update for a product without one. Nothing in the specs defines another initialisation mechanism. |
+| I-D3 | A stock update sets the absolute quantity; `reason` is optional and recorded in `StockLevelUpdated`; an update below the reserved quantity is rejected. |
+| I-D4 | Inventory Service error body is `{error, message}` with the codes of the API error contract. |
+| I-D5 | `StockLow` uses a configurable threshold (default 10) on available stock (`quantity − reservedQuantity`). |
+| I-D6 | Apache Kafka is used for asynchronous communication. Recommended library: Spring for Apache Kafka (`spring-kafka`); not added yet. Event contracts are to be agreed together with Order Service (Architecture Decision 14, Open). |
+
+**Summary of changes:**
+
+- `specs/api-endpoints.md`: new "Inventory Service DTOs" table and notes on I3 initialisation and validation, I1 and I2 errors (I-D1–I-D3).
+- `specs/event-sourcing.md`: when `InventoryInitialized` is recorded, the `updateStock` rules, and the definition of available stock, the threshold and when `StockLow` / `ProductRestocked` are raised (I-D2, I-D3, I-D5).
+- `specs/architecture.md`: Architecture Decision 13 (inventory record and stock rules, Resolved) and 14 (Kafka library and event contracts, Open).
+- `pom.xml`: added `<module>inventory-service</module>`.
+- `README.md`: inventory-service status changed from "placeholder" to "in progress".
+- Not changed: the error contract does not define the error body, and catalog-service (`error`) and account-service (`code`) differ. Reported to the user; smallest fix is to define the body in `specs/api-endpoints.md` and rename the field in account-service.
+
+**Files created/modified:**
+
+- `specs/api-endpoints.md`
+- `specs/event-sourcing.md`
+- `specs/architecture.md`
+- `pom.xml`
+- `README.md`
+- `PROMPT_HISTORY.md`
