@@ -72,15 +72,26 @@ Field names and types follow the [Catalog Service Domain Model](domain-model.md#
 
 > In the normal order flow, stock is reserved and released through Kafka events (`OrderPlaced` / `OrderCancelled`), not through these REST endpoints. The I1 REST endpoints are kept for direct use and testing — see [Architecture Decisions](architecture.md#architecture-decisions).
 
-#### Inventory Service DTOs (I3)
+#### Inventory Service DTOs
 
-Field names and types follow [InventoryItem](domain-model.md#21-inventoryitem).
+Field names and types follow the [Inventory Service Domain Model](domain-model.md#2-inventory-service-domain-model).
 
 | DTO | Fields |
 |---|---|
 | InventoryResponse | productId, quantity, reservedQuantity |
+| StockUpdateRequest | quantity (new absolute stock level, 0 or more), reason (optional) |
+| StockReservationRequest | orderId, quantity (1 or more) |
+| StockReservationResponse | id, productId, orderId, quantity, status (`ACTIVE` / `RELEASED` / `CONFIRMED`) |
+| StockNotificationRequest | userId |
+| StockNotificationResponse | id, productId, userId, createdAt |
 
-> Available stock is `quantity − reservedQuantity`; a product is in stock when it is greater than 0. Catalog Service (C2 `stockStatus`) and Recommendation Service (R1) read `GET /inventory/{productId}` with this contract.
+> `InventoryResponse` is the contract read by Catalog Service (C2 `stockStatus`) and Recommendation Service (R1) through `GET /inventory/{productId}`: available stock is `quantity − reservedQuantity`, and a product is in stock when it is greater than 0. `GET /inventory/{productId}` returns `ResourceNotFound` (404) when the product has no inventory record.
+>
+> `PUT /inventory/{productId}` (I3) sets the absolute stock quantity. The first update for a product that has no inventory record creates the record (`InventoryInitialized` with no stock, followed by `StockLevelUpdated`); Inventory Service does not check that the product exists in Catalog Service. `reason` is optional and is recorded in `StockLevelUpdated`. A missing or negative `quantity`, or a `quantity` lower than the reserved quantity, returns `ValidationFailed` (400).
+>
+> `POST /inventory/{productId}/reservations` (I1) returns `StockUnavailable` (409) when `quantity` is greater than the available stock. `DELETE /inventory/{productId}/reservations/{reservationId}` returns `ReservationConflict` (409) when the reservation does not exist for the product or is not `ACTIVE`. Both return `ResourceNotFound` (404) when the product has no inventory record.
+>
+> `POST /inventory/{productId}/notifications` (I2) returns `ResourceNotFound` (404) when the product has no inventory record. Subscribing again with the same `userId` returns the existing subscription.
 
 ### Order Service (http://localhost:8083/api)
 
@@ -89,7 +100,7 @@ Field names and types follow [InventoryItem](domain-model.md#21-inventoryitem).
 | O1 | POST | /orders | OrderCreateRequest | 201 Created (OrderResponse) | Create a DRAFT order (the customer's cart) |
 | O1 | POST | /orders/{orderId}/items | OrderItemCreateRequest | 201 Created (OrderResponse) | Add a product to a DRAFT order (cart) |
 | O1 | DELETE | /orders/{orderId}/items/{orderItemId} | None | 204 No Content | Remove a product from a DRAFT order (cart) |
-| O1 | POST | /orders/{orderId}/checkout | None | 200 OK (OrderResponse) | Check out the order (DRAFT → PLACED) and begin the order / inventory flow |
+| O1 | POST | /orders/{orderId}/checkout | None | 202 Accepted (OrderResponse) | Check out the order (DRAFT → PLACED) and begin the order / inventory flow; the stock reservation result arrives asynchronously |
 | O2 | PUT | /orders/{orderId}/delivery-address | DeliveryAddressRequest | 200 OK (OrderResponse) | Select a saved delivery address for an order |
 | O4 | PUT | /orders/{orderId}/payment | PaymentStatusRequest | 200 OK (OrderResponse) | Process and record the payment status of an order |
 | O5 | GET | /orders/{orderId} | None | 200 OK (OrderResponse) | Retrieve and track a specific order |
@@ -98,6 +109,30 @@ Field names and types follow [InventoryItem](domain-model.md#21-inventoryitem).
 | R3 | POST | /orders/from-recommendation/{recommendationId} | None | 201 Created (OrderResponse) | Create a DRAFT order (cart) containing the components of a recommended PC build |
 
 > The cart is an Order in `DRAFT` status; there are no separate cart endpoints. See [Order Lifecycle](domain-model.md#33-order-lifecycle). Item and checkout operations on an order that is not `DRAFT`, payment on an order that is not `PROCESSING`, and cancelling a `COMPLETED` order return `OrderStateViolation` (409).
+
+#### Order Service DTOs
+
+Field names and types follow the [Order Service Domain Model](domain-model.md#3-order-service-domain-model).
+
+| DTO | Fields |
+|---|---|
+| OrderCreateRequest | userId |
+| OrderItemCreateRequest | productId, quantity (1 or more) |
+| DeliveryAddressRequest | addressId (id of one of the customer's saved addresses in Account Service) |
+| PaymentStatusRequest | paymentStatus (`PAID` / `FAILED`) |
+| OrderResponse | id, userId, status, totalPrice, createdAt, deliveryAddressId, paymentStatus, paymentDueAt, items (Array of {id, productId, quantity, unitPrice}) |
+
+> **Cart (O1).** A customer can have only one `DRAFT` order: `POST /orders` returns `OrderStateViolation` (409) when the customer already has one. `POST /orders/{orderId}/items` takes `unitPrice` from the product's current price in Catalog Service (read with `GET /products`, not `GET /products/{productId}`); a `productId` that is not in the catalog returns `ResourceNotFound` (404). Adding a product that is already in the cart increases its quantity instead of adding a second item, and updates its `unitPrice` to the current price. Removing an `orderItemId` that is not in the order returns `ResourceNotFound` (404).
+>
+> **Delivery address (O2).** The address can be selected while the order is `DRAFT`. Order Service reads the customer's saved addresses from Account Service (`GET /users/{userId}/addresses`, forwarding the token); an `addressId` that is not one of them returns `ResourceNotFound` (404).
+>
+> **Checkout (O1).** Checkout needs at least one item and a selected delivery address; otherwise it returns `OrderStateViolation` (409). It returns 202 Accepted with the order in status `PLACED`: stock is reserved asynchronously, and the result (`StockReserved` or `StockReservationFailed`) moves the order to `PROCESSING` or `CANCELLED`. Order Service does not return `StockUnavailable` synchronously; clients read the result with `GET /orders/{orderId}`.
+>
+> **Payment (O4).** `paymentStatus` must be `PAID` or `FAILED`; anything else returns `ValidationFailed` (400). When the order becomes `PROCESSING`, `paymentDueAt` is set to 10 minutes later (configurable). A scheduled check in Order Service cancels `PROCESSING` orders whose `paymentDueAt` has passed and publishes `OrderCancelled`.
+>
+> **Order from a recommended build (R3).** `POST /orders/from-recommendation/{recommendationId}` adds every component of the build to the customer's cart with quantity 1, at the product's current Catalog price; the cart is created if the customer has none, otherwise the components are added to the existing cart. Recommendation Service's 401, 403 and 404 are passed on as `AuthenticationRequired`, `AccessDenied` and `ResourceNotFound`; a component that is no longer in the catalog returns `ResourceNotFound` (404).
+>
+> When Account, Catalog or Recommendation Service is unavailable, returns a 5xx or times out, the request fails with `ServiceUnavailable` (503). Account Service's 401, 403 and 404 on the address call are passed on as the same errors. `GET /users/{userId}/orders` returns the newest order first.
 
 ### Account Service (http://localhost:8084/api)
 
@@ -175,6 +210,7 @@ Field names and types follow the [Recommendation Service Domain Model](domain-mo
 - Resource identifiers are included as path parameters, for example `/products/{productId}`.
 - Successful creation requests return 201 Created.
 - Successful queries and updates return 200 OK.
+- A request that is accepted but whose result arrives asynchronously returns 202 Accepted (order checkout).
 - Successful deletions that do not require a response body return 204 No Content.
 - Inter-service asynchronous communication uses Kafka events where specified by the system architecture.
 - Account-specific and administrative endpoints require authentication and appropriate authorization — see [Authentication and Authorisation](#authentication-and-authorisation).
@@ -202,6 +238,8 @@ Agreed design for A2 / NFR-04 ([Architecture Decision 11](architecture.md#archit
 - The H2 console is a development tool and is not protected.
 
 ### Error Response Contract
+
+Every error response has the JSON body `{ "code": "<Error Code>", "message": "<human-readable explanation>" }`, where `code` is one of the error codes below.
 
 | Error Code | HTTP Status | Applies To | Meaning |
 |---|---|---|---|

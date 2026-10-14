@@ -135,6 +135,7 @@ Every event also carries `occurredAt` (DateTime). `ProductCreated`, `ProductUpda
 | createdAt | DateTime | Date and Time of the order | Required |
 | deliveryAddressId | String | Identifier of the saved Address (Account Service) selected for delivery (O2) | Optional |
 | paymentStatus | String | Status of the payment (PENDING/PAID/FAILED) (O4) | Required |
+| paymentDueAt | DateTime | Time by which payment must be recorded. Set when the order becomes PROCESSING, to the current time + 10 minutes (`order.payment-time-limit`); empty before that. An unpaid order is cancelled after it (FR-06) | Optional |
 
 ### 3.2 OrderItem
 
@@ -152,7 +153,11 @@ There is no separate Cart entity or service: the Order aggregate also represents
 ```text
 DRAFT -> PLACED -> PROCESSING -> COMPLETED
   |        |           |
+  v        v           v
   +--------+-----------+------> CANCELLED
+
+Happy path:  DRAFT -> PLACED -> PROCESSING -> COMPLETED
+Cancelled:   DRAFT / PLACED / PROCESSING -> CANCELLED
 ```
 
 | Status | Meaning |
@@ -179,6 +184,10 @@ DRAFT -> PLACED -> PROCESSING -> COMPLETED
 - When Inventory Service consumes `OrderCancelled`, it releases any stock reservation held for that order (`StockReservationReleased`).
 - When Inventory Service consumes `OrderCompleted`, it confirms the stock reservation for that order (`StockReservationConfirmed`).
 - A COMPLETED order cannot be cancelled.
+- A customer can have only one DRAFT order at a time.
+- Adding a product that is already in a DRAFT order increases the quantity of its OrderItem. `unitPrice` is the product's price in Catalog Service when the item was last added.
+- Checkout requires at least one OrderItem and a `deliveryAddressId`.
+- The payment time limit is 10 minutes from the moment the order becomes PROCESSING: `paymentDueAt` is set to the current time + 10 minutes at that transition. A scheduled check in Order Service cancels overdue orders.
 
 Operations that are not valid for the current status are rejected with `OrderStateViolation` (409 Conflict).
 

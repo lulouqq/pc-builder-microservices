@@ -1232,3 +1232,231 @@ No commit/push
 
 - `specs/api-endpoints.md`
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 25
+
+> Recorded as Prompt 23 on `feature/inventory-service` before `origin/main` was merged (renumbered to follow Prompts 23–24 from `main`).
+
+**Date:** 2026-10-14
+
+**Goal:** Project-wide parts of the inventory-service work recorded as Prompt 1 in `inventory-service/PROMPT_HISTORY.md`: record the inventory decisions in the specs, register the module, and record the Kafka library recommendation.
+
+**Exact user prompt:**
+
+````text
+1. Recommendation will expect GET /inventory/{productId} to return productId, quantity, reservedQuantity as the InventoryResponse contract. For the rest, define them as necessary.
+
+2. Create an inventory record automatically when the first stock update arrives for a product without an existing record. Check the requirements and current implementation to see whether this is appropriate. If nothing specifies another initialization mechanism, proceed with this approach and document the assumption.
+
+3. Set absolute quantity for stock. Reason is a request field if the system needs to record why stock changed; otherwise, don't require it. Reject updates where the new quantity would be lower than the reserved quantity.
+
+4. Use a consistent error response body of { "error": "ERROR_CODE", "message": "Human-readable explanation" } across the inventory service. Check the existing services and API conventions first, and align with the established format if one already exists. Keep HTTP status codes appropriate to each error.
+
+5. Use a configurable low-stock threshold, with a default value of 10 units unless the existing requirements or configuration specify otherwise. Publish StockLow when the available stock (quantity - reservedQuantity) falls below the configured threshold. Document the assumption and avoid hardcoding the threshold in business logic.
+
+For Kafka Side gaps:
+Apache Kafka is a project requirement. Use Apache Kafka for asynchronous communication between microservices. Check the existing dependencies and configuration to determine the appropriate Kafka integration library. 
+For rest of the gaps, check if implementing Order service will better to resolve those gaps. I am building order service as well.
+````
+
+**Decisions:**
+
+| # | Decision |
+|---|---|
+| I-D1 | `InventoryResponse` = `productId, quantity, reservedQuantity`. Other Inventory DTOs: `StockUpdateRequest` (quantity, reason?), `StockReservationRequest` (orderId, quantity), `StockReservationResponse` (id, productId, orderId, quantity, status), `StockNotificationRequest` (userId), `StockNotificationResponse` (id, productId, userId, createdAt). |
+| I-D2 | An inventory record is created automatically by the first stock update for a product without one. Nothing in the specs defines another initialisation mechanism. |
+| I-D3 | A stock update sets the absolute quantity; `reason` is optional and recorded in `StockLevelUpdated`; an update below the reserved quantity is rejected. |
+| I-D4 | Inventory Service error body is `{error, message}` with the codes of the API error contract. |
+| I-D5 | `StockLow` uses a configurable threshold (default 10) on available stock (`quantity − reservedQuantity`). |
+| I-D6 | Apache Kafka is used for asynchronous communication. Recommended library: Spring for Apache Kafka (`spring-kafka`); not added yet. Event contracts are to be agreed together with Order Service (Architecture Decision 14, Open). |
+
+**Summary of changes:**
+
+- `specs/api-endpoints.md`: new "Inventory Service DTOs" table and notes on I3 initialisation and validation, I1 and I2 errors (I-D1–I-D3).
+- `specs/event-sourcing.md`: when `InventoryInitialized` is recorded, the `updateStock` rules, and the definition of available stock, the threshold and when `StockLow` / `ProductRestocked` are raised (I-D2, I-D3, I-D5).
+- `specs/architecture.md`: Architecture Decision 13 (inventory record and stock rules, Resolved) and 14 (Kafka library and event contracts, Open).
+- `pom.xml`: added `<module>inventory-service</module>`.
+- `README.md`: inventory-service status changed from "placeholder" to "in progress".
+- Not changed: the error contract does not define the error body, and catalog-service (`error`) and account-service (`code`) differ. Reported to the user; smallest fix is to define the body in `specs/api-endpoints.md` and rename the field in account-service.
+
+**Files created/modified:**
+
+- `specs/api-endpoints.md`
+- `specs/event-sourcing.md`
+- `specs/architecture.md`
+- `pom.xml`
+- `README.md`
+- `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 26
+
+**Date:** 2026-10-14
+
+**Goal:** Project-wide and inventory-service parts of the order-service work recorded as Prompt 2 in `order-service/PROMPT_HISTORY.md`: record the order decisions in the specs, define the error body, rename the inventory error field, and register the module.
+
+**Exact user prompt:**
+
+````text
+Decisions required before REST side:
+1. Create the fields of the DTOs as required.
+2. Catalog's stored price
+3. Increase quantity
+4. Empty cart not allowed, and delivery address required for checkout. 
+5. Can have 1 draft order
+6. Time limit is 10 minutes. Scheduled timeout check in the Order Service, with Kafka events to notify other services. Define accepted values which you think is best.
+7. return 202 Accepted initially, then communicate the reservation result asynchronously through Kafka.
+8. Update error body field name to match account and recommendation.
+
+For the Kafka side, make a draft and take my approval.
+````
+
+**Decisions:**
+
+| # | Decision |
+|---|---|
+| O-D1 | Order DTOs: `OrderCreateRequest` (userId), `OrderItemCreateRequest` (productId, quantity), `DeliveryAddressRequest` (addressId), `PaymentStatusRequest` (paymentStatus), `OrderResponse` (id, userId, status, totalPrice, createdAt, deliveryAddressId, paymentStatus, paymentDueAt, items[{id, productId, quantity, unitPrice}]). |
+| O-D2 | `unitPrice` is Catalog Service's stored price. |
+| O-D3 | Adding a product that is already in the cart increases its quantity. |
+| O-D4 | Checkout requires a non-empty cart and a delivery address. |
+| O-D5 | A customer can have one DRAFT order. |
+| O-D6 | Payment time limit: 10 minutes, enforced by a scheduled check in Order Service, which publishes `OrderCancelled`. `PaymentStatusRequest` accepts `PAID` or `FAILED`. |
+| O-D7 | Checkout returns 202 Accepted; the reservation result is communicated asynchronously through Kafka. |
+| O-D8 | The error body field is `code` in all services: `{code, message}`. |
+| O-D9 | Kafka contracts: a draft is in `order-service/README.md`, awaiting the user's approval. Architecture Decision 14 stays Open. |
+
+**Summary of changes:**
+
+- `specs/api-endpoints.md`: checkout now returns 202 Accepted; new "Order Service DTOs" table and notes (cart, delivery address, checkout, payment, order from a recommendation, downstream errors); new contract rule for 202; the Error Response Contract now defines the body `{code, message}`.
+- `specs/domain-model.md`: `Order.paymentDueAt`; lifecycle notes on the single DRAFT order, merging quantities, checkout preconditions and the 10-minute limit.
+- `specs/architecture.md`: Architecture Decision 15 (order cart, checkout and payment rules, Resolved).
+- inventory-service: error body field renamed from `error` to `code` (`ErrorResponse`, `InventoryApiTests`, `README.md`).
+- `pom.xml`: added `<module>order-service</module>`. `README.md`: order-service status.
+- Conflict reported, not changed: catalog-service still returns `{error, message}`, which no longer matches the error contract. Smallest fix: rename the field in catalog-service's `ErrorResponse` and its tests.
+
+**Files created/modified:**
+
+- `specs/api-endpoints.md`
+- `specs/domain-model.md`
+- `specs/architecture.md`
+- `inventory-service/src/main/java/com/csci318/inventoryservice/presentation/dto/ErrorResponse.java`
+- `inventory-service/src/test/java/com/csci318/inventoryservice/InventoryApiTests.java`
+- `inventory-service/README.md`
+- `pom.xml`
+- `README.md`
+- `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 27
+
+**Date:** 2026-10-14
+
+**Goal:** Implement the approved Kafka draft in order-service and inventory-service, record it in the specs (Architecture Decision 14), and report how outdated catalog-service is.
+
+**Exact user prompt:**
+
+````text
+Approved. Proceed with implementation. Also update me on how outdated catalog service is after this change and the recommended steps.
+````
+
+**Decision:** the Kafka draft from Prompt 26 (`order-service/README.md`) is approved: Spring for Apache Kafka, JSON messages, topics `order-events`, `inventory-reservation-events` and `inventory-stock-events`, the event fields, all-or-nothing reservation, and a `docker-compose.yml` broker.
+
+**Summary of changes:**
+
+- `specs/architecture.md`: new section "Kafka Event Contracts" (topics, keys, common and event-specific fields, an example, processing rules); Architecture Decision 14 changed from Open to Resolved.
+- `docker-compose.yml` (new): single-node Apache Kafka on `localhost:9092`. Not run on the development machine (Docker is not installed there).
+- order-service:
+  - `spring-kafka` and `spring-kafka-test` dependencies; `spring.kafka.*` and `messaging.kafka.enabled` settings.
+  - `OrderEventKafkaPublisher` publishes `OrderPlaced`, `OrderCancelled` and `OrderCompleted` to `order-events` after the transaction commits.
+  - `ReservationEventKafkaListener` consumes `StockReserved` and `StockReservationFailed` from `inventory-reservation-events` and calls `OrderService.handleStockReserved` / `handleStockReservationFailed`.
+  - `KafkaTopics` (topic names, topic creation).
+- inventory-service:
+  - Same dependencies and settings.
+  - `OrderStockService` (new): all-or-nothing reservation for an order, release and confirm of an order's reservations.
+  - `OrderEventKafkaListener` consumes `order-events`; `InventoryKafkaPublisher` publishes the reservation result to `inventory-reservation-events` and `StockChanged` to `inventory-stock-events`.
+  - New in-process events `OrderStockReserved` and `OrderStockReservationFailed`; `StockReservationRepository` queries by order.
+- Difference from the draft's wording: for a failed order the draft said Inventory "releases the items it already reserved". The implementation checks every item first and reserves nothing when one is unavailable, so no reserve/release events are stored for a failed order. The outcome is the same, and it matches `specs/cqrs.md` ("no event is stored").
+- Tests run without a broker by default (`messaging.kafka.enabled=false` in the test profile). New tests: order-service `OrderKafkaMessagingTests` (5) and `OrderKafkaIntegrationTests` (2, embedded broker); inventory-service `OrderStockFlowTests` (8) and `InventoryKafkaIntegrationTests` (2, embedded broker).
+- READMEs: order-service and inventory-service (Kafka messaging sections, status, settings), root `README.md` (statuses, Kafka instructions, technology stack).
+- catalog-service: reviewed only, not changed. Findings are in the reply to the user: error body field `error` instead of `code`; no JWT validation on C5 and review submission; the Inventory contract is still described as provisional although it is now confirmed; C3 still has no Kafka publisher, consumer or endpoint; README and root status are out of date.
+
+**Still open:**
+
+- I2: how subscribed customers are notified (`StockChanged` has no consumer).
+- A send that fails because the broker is down is logged and not repeated (no outbox); a `PLACED` order whose reservation result never arrives stays `PLACED`.
+
+**Files created/modified:**
+
+- `specs/architecture.md`
+- `docker-compose.yml` (new)
+- `order-service/pom.xml`, `order-service/src/main/resources/application.yml`, `order-service/src/test/resources/application-test.yml`
+- `order-service/src/main/java/com/csci318/orderservice/infrastructure/{KafkaTopics,OrderEventKafkaPublisher,ReservationEventKafkaListener}.java` (new)
+- `order-service/src/test/java/com/csci318/orderservice/{OrderKafkaMessagingTests,OrderKafkaIntegrationTests}.java` (new)
+- `inventory-service/pom.xml`, `inventory-service/src/main/resources/application.yml`, `inventory-service/src/test/resources/application-test.yml`
+- `inventory-service/src/main/java/com/csci318/inventoryservice/service/{OrderStockService,OrderLine}.java` (new)
+- `inventory-service/src/main/java/com/csci318/inventoryservice/domain/event/{OrderStockReserved,OrderStockReservationFailed}.java` (new)
+- `inventory-service/src/main/java/com/csci318/inventoryservice/infrastructure/{KafkaTopics,OrderEventKafkaListener,InventoryKafkaPublisher}.java` (new)
+- `inventory-service/src/main/java/com/csci318/inventoryservice/infrastructure/StockReservationRepository.java`
+- `inventory-service/src/test/java/com/csci318/inventoryservice/{OrderStockFlowTests,InventoryKafkaIntegrationTests}.java` (new)
+- `order-service/README.md`, `inventory-service/README.md`, `README.md`
+- `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 28
+
+**Date:** 2026-10-14
+
+**Goal:** Commit the order-service and Kafka work, and assess whether order-service and inventory-service are ready for a pull request.
+
+**Exact user prompt:**
+
+````text
+Commit current work. Is order and inventory service fully implemented to do a pr? Catalog service will be worked on a seperate branch, so hold all work for that branch.
+````
+
+**Summary of changes:**
+
+- Committed the uncommitted work of Prompts 26 and 27 on `feature/inventory-order-service` (no code changes in this prompt).
+- Assessment (in the reply to the user): O1 - O6, R3, I1 and I3 are implemented against the specs; I2 is implemented up to the subscription, and delivering the notification to the customer is still undecided; `CheckStockAvailabilityQuery` (`specs/cqrs.md`) has no handler or endpoint.
+- catalog-service work is on hold for a separate branch.
+
+**Files created/modified:**
+
+- `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 29
+
+**Date:** 2026-10-14
+
+**Goal:** Small specs cleanup before merging PR #8.
+
+**Exact user prompt:**
+
+````text
+Small docs cleanup before merge:
+In specs/api-endpoints.md, remove the duplicated Inventory Service DTOs heading/intro and duplicate InventoryResponse explanation.
+In specs/domain-model.md, show CANCELLED in the order lifecycle, not only DRAFT → PLACED → PROCESSING → COMPLETED.
+Clarify paymentDueAt: it is set when the order becomes PROCESSING to current time + 10 minutes.
+In Kafka docs, clarify that ordering is guaranteed for the same key within each topic/partition, not across different topics.
+No code changes needed.
+````
+
+**Summary of changes:**
+
+- `specs/domain-model.md`: the order lifecycle diagram now shows the cancelled path explicitly (DRAFT / PLACED / PROCESSING -> CANCELLED); `paymentDueAt` is described as set to the current time + 10 minutes when the order becomes PROCESSING (matches `OrderService`).
+- `specs/architecture.md` (Kafka Event Contracts): ordering is guaranteed only for messages with the same key within one topic (same partition), not across topics.
+- `specs/api-endpoints.md`: not changed. It has one "Inventory Service DTOs" heading and one `InventoryResponse` explanation; no duplicate was found (reported to the user).
+- No code changes.
+
+**Files created/modified:**
+
+- `specs/domain-model.md`
+- `specs/architecture.md`
+- `PROMPT_HISTORY.md`

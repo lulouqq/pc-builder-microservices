@@ -1,0 +1,59 @@
+server:
+  port: 8083
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: order-service
+  datasource:
+    url: jdbc:h2:mem:orderdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      auto-offset-reset: earliest
+    producer:
+      properties:
+        # do not block a request for long when the broker is down
+        max.block.ms: 5000
+
+# JWT validation (specs/api-endpoints.md "Authentication and Authorisation").
+# JWT_SECRET has no default: it must be set before starting the service, with the same value
+# (at least 32 bytes) as in Account Service.
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+
+# Synchronous REST calls
+account-service:
+  base-url: http://localhost:8084/api
+  timeout: 2s
+catalog-service:
+  base-url: http://localhost:8081/api
+  timeout: 2s
+recommendation-service:
+  base-url: http://localhost:8085/api
+  timeout: 2s
+
+order:
+  # A PROCESSING order with no payment recorded within this time is cancelled (FR-06).
+  payment-time-limit: ${PAYMENT_TIME_LIMIT:10m}
+  # How often overdue orders are looked for (ISO-8601 duration).
+  payment-timeout-check-interval: ${PAYMENT_TIMEOUT_CHECK_INTERVAL:PT30S}
+
+# Kafka messaging (Architecture Decision 14). Set KAFKA_ENABLED=false to run without a broker:
+# events are then only raised inside the service.
+messaging:
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
