@@ -18,7 +18,10 @@ public class KafkaTopics {
     /** StockReserved, StockReservationFailed: published by Inventory Service, keyed by order id. */
     public static final String INVENTORY_RESERVATION_EVENTS = "inventory-reservation-events";
 
-    /** StockChanged: published by Inventory Service, keyed by product id. */
+    /**
+     * StockChanged: published by Inventory Service, keyed by product id, and consumed by Inventory Service
+     * itself for the stock alerts (I2).
+     */
     public static final String INVENTORY_STOCK_EVENTS = "inventory-stock-events";
 
     /** Creates the topics this service publishes to, if the broker does not have them yet. */

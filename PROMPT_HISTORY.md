@@ -1524,3 +1524,60 @@ Update the specs first, then implement C3 and its tests. Do not change unrelated
 - `catalog-service/src/main/java/com/csci318/catalogservice/presentation/ProductController.java`
 - `catalog-service/src/test/java/com/csci318/catalogservice/{TrendingProductsTests,ProductViewedKafkaMessagingTests,CatalogKafkaIntegrationTests,TrendingProductsCalculatorTests}.java`
 - `catalog-service/README.md`, `README.md`, `PROMPT_HISTORY.md`, `catalog-service/PROMPT_HISTORY.md`
+
+---
+
+## Prompt 32
+
+**Date:** 2026-10-14
+
+**Goal:** Record the approved I2 (stock notifications) decisions in the shared specs, then implement stored stock alerts with a polling endpoint in inventory-service, with tests.
+
+**Exact user prompt:**
+
+````text
+Confirming the minimal I2 design and the suggested decisions from the previous analysis. Use:
+saved StockAlert entities in H2;
+GET /users/{userId}/stock-alerts, owner-only;
+consumer group inventory-stock-alerts;
+notifications only for STOCK_LOW and PRODUCT_RESTOCKED;
+subscriptions remain active after a notification;
+unsubscribe, read/unread, pagination and retention are out of scope for now;
+each alert contains productId, availableQuantity, type, generated message, occurredAt, and sourceEventId;
+deduplication through unique (sourceEventId, userId);
+no Catalog calls;
+when KAFKA_ENABLED=false, use the in-process fallback through the same service;
+if a user subscribes after a stock change but before the Kafka event is processed, they may still receive the alert — this is acceptable and must be documented.
+In the specs, describe “real-time” carefully: the alert is created within a few seconds after the stock change and becomes available to the client through REST polling; push delivery is not implemented.
+First update the shared specs, architecture, domain model, API, CQRS and user stories, then implement the code and tests from your plan. Don’t change unrelated parts of the project.
+After implementation, run the full ./mvnw clean test and provide a report:
+which files changed;
+how many tests passed for each module;
+which new tests were added;
+whether any known gaps remain.
+````
+
+**Summary of changes:**
+
+- Specs (written before the code):
+  - `specs/architecture.md`: new Architecture Decision 17 (stock notifications: stored alerts, polling, the meaning of "real time", consumer group `inventory-stock-alerts`, only `STOCK_LOW` / `PRODUCT_RESTOCKED`, deduplication, in-process fallback, accepted subscribe-before-processing case, out-of-scope items). `inventory-stock-events` now has a consumer, the Kafka Flows row names it, a "Stock alerts" processing rule was added, and decision 14 no longer lists I2 as open.
+  - `specs/domain-model.md`: `StockAlert` entity (new section 2.4) and the class table rows.
+  - `specs/api-endpoints.md`: `GET /users/{userId}/stock-alerts`, `StockAlertResponse`, an I2 note (newest first, empty list, no 404, polling), and the endpoint in the Customer (owner) row.
+  - `specs/cqrs.md`: `stock_alert` read side, I2 classification, `GetStockAlertsQuery`, the stock-alert flow.
+  - `specs/user-stories.md`: I2 mapping, endpoint mapping and an agreed-flow note under I2.
+- inventory-service:
+  - New: `StockAlert` + `StockAlertType` (domain), `StockAlertRepository`, `StockAlertService` (one alert per subscriber, skips an existing `sourceEventId` + `userId`, `REQUIRES_NEW`), `StockChangedKafkaListener` (group `inventory-stock-alerts`), `InProcessStockAlertRecorder` (Kafka disabled, after commit), `GetStockAlertsQuery`, `StockAlertController`, `StockAlertResponse`.
+  - Changed: `InventoryQueryService` (handles `GetStockAlertsQuery`), `StockNotificationSubscriptionRepository.findByProductId`, `SecurityConfig` (`/users/{userId}/**` own-user rule, as in Recommendation Service), `KafkaTopics` comment.
+  - Tests: `StockAlertTests` (3), `StockChangedKafkaListenerTests` (4), `StockAlertApiTests` (8), and 2 new tests in `InventoryKafkaIntegrationTests` (embedded Kafka). Existing tests unchanged.
+  - `inventory-service/README.md` and root `README.md`: I2 status, endpoint, Kafka consumer, assumptions, remaining gaps.
+- `./mvnw clean test`: all pass (catalog 67, account 68, recommendation 72, inventory 58, order 54).
+
+**Files created/modified:**
+
+- `specs/architecture.md`, `specs/domain-model.md`, `specs/api-endpoints.md`, `specs/cqrs.md`, `specs/user-stories.md`
+- `inventory-service/src/main/java/com/csci318/inventoryservice/domain/{StockAlert,StockAlertType}.java`
+- `inventory-service/src/main/java/com/csci318/inventoryservice/infrastructure/{StockAlertRepository,StockChangedKafkaListener,InProcessStockAlertRecorder,StockNotificationSubscriptionRepository,SecurityConfig,KafkaTopics}.java`
+- `inventory-service/src/main/java/com/csci318/inventoryservice/service/{StockAlertService,GetStockAlertsQuery,InventoryQueryService}.java`
+- `inventory-service/src/main/java/com/csci318/inventoryservice/presentation/{StockAlertController,dto/StockAlertResponse}.java`
+- `inventory-service/src/test/java/com/csci318/inventoryservice/{StockAlertTests,StockChangedKafkaListenerTests,StockAlertApiTests,InventoryKafkaIntegrationTests}.java`
+- `inventory-service/README.md`, `README.md`, `PROMPT_HISTORY.md`, `inventory-service/PROMPT_HISTORY.md`

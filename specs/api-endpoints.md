@@ -69,6 +69,7 @@ Field names and types follow the [Catalog Service Domain Model](domain-model.md#
 | I1 | POST | /inventory/{productId}/reservations | StockReservationRequest | 201 Created (StockReservationResponse) | Reserve available stock during checkout |
 | I1 | DELETE | /inventory/{productId}/reservations/{reservationId} | None | 204 No Content | Release an existing stock reservation |
 | I2 | POST | /inventory/{productId}/notifications | StockNotificationRequest | 201 Created (StockNotificationResponse) | Register a customer to receive stock notifications for a product |
+| I2 | GET | /users/{userId}/stock-alerts | None | 200 OK (Array\<StockAlertResponse\>) | Retrieve the customer's stock alerts for subscribed products |
 | I3 | PUT | /inventory/{productId} | StockUpdateRequest | 200 OK (InventoryResponse) | Update the stock level of a product |
 | I3 | GET | /inventory/{productId} | None | 200 OK (InventoryResponse) | Retrieve current stock information for a product |
 
@@ -86,6 +87,7 @@ Field names and types follow the [Inventory Service Domain Model](domain-model.m
 | StockReservationResponse | id, productId, orderId, quantity, status (`ACTIVE` / `RELEASED` / `CONFIRMED`) |
 | StockNotificationRequest | userId |
 | StockNotificationResponse | id, productId, userId, createdAt |
+| StockAlertResponse | id, userId, productId, type (`STOCK_LOW` / `PRODUCT_RESTOCKED`), availableQuantity, message, occurredAt |
 
 > `InventoryResponse` is the contract read by Catalog Service (C2 `stockStatus`) and Recommendation Service (R1) through `GET /inventory/{productId}`: available stock is `quantity − reservedQuantity`, and a product is in stock when it is greater than 0. `GET /inventory/{productId}` returns `ResourceNotFound` (404) when the product has no inventory record.
 >
@@ -94,6 +96,8 @@ Field names and types follow the [Inventory Service Domain Model](domain-model.m
 > `POST /inventory/{productId}/reservations` (I1) returns `StockUnavailable` (409) when `quantity` is greater than the available stock. `DELETE /inventory/{productId}/reservations/{reservationId}` returns `ReservationConflict` (409) when the reservation does not exist for the product or is not `ACTIVE`. Both return `ResourceNotFound` (404) when the product has no inventory record.
 >
 > `POST /inventory/{productId}/notifications` (I2) returns `ResourceNotFound` (404) when the product has no inventory record. Subscribing again with the same `userId` returns the existing subscription.
+>
+> `GET /users/{userId}/stock-alerts` (I2) returns the user's alerts newest first (by `occurredAt`), or an empty array when there are none; Inventory Service does not know which users exist, so it never returns 404. Alerts are created asynchronously from `StockChanged` ([Architecture Decision 17](architecture.md#architecture-decisions)): an alert is available within a few seconds of the stock change, and the client polls this endpoint to receive it (no push delivery). Every subscription of the product gets one alert per `STOCK_LOW` / `PRODUCT_RESTOCKED`; subscriptions stay active. There is no unsubscribe, read/unread state or pagination yet.
 
 ### Order Service (http://localhost:8083/api)
 
@@ -229,7 +233,7 @@ Agreed design for A2 / NFR-04 ([Architecture Decision 11](architecture.md#archit
 | Access | Rule | Endpoints |
 |---|---|---|
 | Public | No token required | Catalog: `GET /products`, `GET /categories`, `GET /products/{productId}`, `GET /products/trending`, `GET /products/{productId}/reviews`. Inventory: `GET /inventory/{productId}`. Account: `POST /users`, `POST /auth/login`. Recommendation: `POST /compatibility/validate` |
-| Customer (owner) | Valid token, and the token's `sub` must be the user the request is for: the `{userId}` path parameter, the `userId` in the request body, or the `userId` stored on the order / recommendation | Account: `GET /users/{userId}`, `PUT /users/{userId}/profile`, all `/users/{userId}/addresses` endpoints, `GET`/`PUT /users/{userId}/preferences`. Catalog: `POST /products/{productId}/reviews`. Inventory: `POST /inventory/{productId}/notifications`. Order: all Order Service endpoints. Recommendation: `POST /recommendations`, `GET /recommendations/{recommendationId}`, `GET /users/{userId}/recommendations` |
+| Customer (owner) | Valid token, and the token's `sub` must be the user the request is for: the `{userId}` path parameter, the `userId` in the request body, or the `userId` stored on the order / recommendation | Account: `GET /users/{userId}`, `PUT /users/{userId}/profile`, all `/users/{userId}/addresses` endpoints, `GET`/`PUT /users/{userId}/preferences`. Catalog: `POST /products/{productId}/reviews`. Inventory: `POST /inventory/{productId}/notifications`, `GET /users/{userId}/stock-alerts`. Order: all Order Service endpoints. Recommendation: `POST /recommendations`, `GET /recommendations/{recommendationId}`, `GET /users/{userId}/recommendations` |
 | Admin | Valid token with `role` = `ADMIN` | Catalog C5: `POST /products`, `PUT`/`DELETE /products/{productId}`, `POST /categories`, `PUT`/`DELETE /categories/{categoryId}`. Inventory I3: `PUT /inventory/{productId}`. Inventory I1: `POST /inventory/{productId}/reservations`, `DELETE /inventory/{productId}/reservations/{reservationId}` (direct use and testing only, Architecture Decision 5) |
 
 - A missing, malformed or expired token, or one with an invalid signature, on a non-public endpoint returns `AuthenticationRequired` (401).

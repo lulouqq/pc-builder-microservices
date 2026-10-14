@@ -35,7 +35,7 @@ This document defines how Inventory Service applies CQRS, including:
 
 - Accepts read requests from API endpoints.
 - Routes requests to query handlers.
-- Reads from `inventory_read_model` only.
+- Reads from the read side only: `inventory_read_model`, and `stock_alert` for I2.
 - Shapes response DTOs for API responses.
 
 **Constraint**
@@ -54,12 +54,17 @@ This document defines how Inventory Service applies CQRS, including:
 - Updated from InventoryItem events.
 - Used for stock availability and inventory lookup queries.
 
+`stock_alert` (I2)
+
+- Created from `StockChanged` (`change` = `STOCK_LOW` / `PRODUCT_RESTOCKED`), one row per subscribed customer; see [Architecture Decision 17](architecture.md#architecture-decisions).
+- Used for a customer's stock alert queries.
+
 ## 5. User Story Classification
 
 | User Story | Story | CQRS Type | Through Aggregate |
 |---|---|---|---|
 | I1 | Reserve Stock During Checkout | Command | Yes |
-| I2 | Receive Stock Notifications | Command (notification subscription) + event-driven projection | No |
+| I2 | Receive Stock Notifications | Command (notification subscription) + event-driven projection (`stock_alert`) + Query (stock alerts) | No |
 | I3 | Update Stock Levels | Command | Yes |
 
 ## 6. Command Catalog
@@ -80,6 +85,7 @@ In the order flow, `ReserveStockCommand` is issued when Inventory Service consum
 |---|---|---|
 | GetInventoryByProductQuery(productId) | inventory_read_model | Eventual |
 | CheckStockAvailabilityQuery(productId) | inventory_read_model | Eventual |
+| GetStockAlertsQuery(userId) | stock_alert | Eventual |
 
 ## 8. Handler Wiring and Read Model Update Flow
 
@@ -93,6 +99,13 @@ Query:
 
 ```text
 API → Query Application Service → Query Handler → inventory_read_model
+```
+
+Stock alerts (I2):
+
+```text
+StockLow / ProductRestocked → StockChanged (inventory-stock-events) → Kafka listener → stock_alert (one row per subscription)
+API → Query Application Service → GetStockAlertsQuery → stock_alert
 ```
 
 ## 9. Consistency Model

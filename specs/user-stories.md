@@ -2,7 +2,7 @@
 
 > Source: `source-docs/User Stories-2.docx`
 >
-> Event names in this file follow the [Architecture Decisions](architecture.md#architecture-decisions): the checkout event is `OrderPlaced` (replaces `OrderCreated`), `CheckoutStarted` is not used, a failed reservation is reported with `StockReservationFailed`, and a paid order publishes `OrderCompleted`, which confirms the reservation (`StockReservationConfirmed`). Where the agreed order flow differs from the wording of a story, a note is added under that story; the story text itself is unchanged. The domain classes `Review` and `StockNotificationSubscription`, added to the [Domain Model](domain-model.md) after the source document, are included in the mapping for C4 and I2.
+> Event names in this file follow the [Architecture Decisions](architecture.md#architecture-decisions): the checkout event is `OrderPlaced` (replaces `OrderCreated`), `CheckoutStarted` is not used, a failed reservation is reported with `StockReservationFailed`, and a paid order publishes `OrderCompleted`, which confirms the reservation (`StockReservationConfirmed`). Where the agreed order flow differs from the wording of a story, a note is added under that story; the story text itself is unchanged. The domain classes `Review`, `StockNotificationSubscription` and `StockAlert`, added to the [Domain Model](domain-model.md) after the source document, are included in the mapping for C4 and I2.
 
 ## User Story Mapping
 
@@ -14,7 +14,7 @@
 | C4: Submit and view product reviews | Product, Review | ProductReviewed (when rating submitted) |
 | C5: Manage products and categories | Product, Category, Specification | ProductCreated, ProductUpdated, ProductRemoved |
 | I1: Reserve Stock During Checkout | InventoryItem, StockReservation | StockReserved, StockReservationReleased, StockReservationConfirmed |
-| I2: Receive Stock Notifications | InventoryItem, StockNotificationSubscription | StockLow, ProductRestocked |
+| I2: Receive Stock Notifications | InventoryItem, StockNotificationSubscription, StockAlert | StockLow, ProductRestocked |
 | I3: Update Stock Levels | InventoryItem | StockLevelUpdated |
 | O1: Add Products to Cart and Checkout | Order, OrderItem | OrderPlaced |
 | O2: Select Delivery Address | Order, Address | None |
@@ -109,6 +109,8 @@ As a Customer, I want to receive real time notifications when a product has rest
 1. Relevant stock changes and generate inventory events
 2. Customer notified when stock threshold reached or restocked
 3. Notifications reflect stock changes in real time.
+
+> Agreed flow ([Architecture Decision 17](architecture.md#architecture-decisions)): a customer subscribes with `POST /inventory/{productId}/notifications`. When `StockLow` or `ProductRestocked` is raised, Inventory Service publishes `StockChanged`, consumes it and stores a `StockAlert` for every subscriber of the product. The customer reads the alerts with `GET /users/{userId}/stock-alerts`. "Real time" means the alert is created within a few seconds of the stock change and is available through REST polling; push delivery is not implemented.
 
 ### I3: Update Stock Levels
 
@@ -281,7 +283,7 @@ As a Customer, I want to view my previous build requests and generated recommend
 | C4 | `GET`, `POST /products/{productId}/reviews` |
 | C5 | `POST /products`, `PUT`/`DELETE /products/{productId}`, `POST /categories`, `PUT`/`DELETE /categories/{categoryId}` |
 | I1 | `POST /inventory/{productId}/reservations`, `DELETE /inventory/{productId}/reservations/{reservationId}`; ReserveStockCommand, ReleaseStockReservationCommand, ConfirmStockReservationCommand |
-| I2 | `POST /inventory/{productId}/notifications`; SubscribeStockNotificationCommand |
+| I2 | `POST /inventory/{productId}/notifications`, `GET /users/{userId}/stock-alerts`; SubscribeStockNotificationCommand, GetStockAlertsQuery |
 | I3 | `PUT`, `GET /inventory/{productId}`; UpdateStockLevelCommand |
 | O1 | `POST /orders`, `POST /orders/{orderId}/items`, `DELETE /orders/{orderId}/items/{orderItemId}`, `POST /orders/{orderId}/checkout` |
 | O2 | `PUT /orders/{orderId}/delivery-address` |

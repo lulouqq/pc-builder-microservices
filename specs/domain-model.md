@@ -6,14 +6,14 @@
 
 *Overview diagram: class diagram of all five service domains (Account, Order, Inventory, Catalog, Recommendation) with the fields listed below and the associations between them — e.g. User 1 — 0..1 UserProfile / 0..1 Preference / 0..\* Address, User 1 — 0..\* Order, Order 1 — 1..\* OrderItem, OrderItem 0..\* — 1 Product, Order 1 — 0..\* StockReservation, InventoryItem 1 — 0..\* StockReservation, InventoryItem 1 — 1 Product, Product 0..\* — 1 Category, Product 1 — 1..\* Specification, User 1 — 0..\* BuildRequest, BuildRequest 1 — 1 PCBuild, PCBuild 1 — 1..\* BuildComponent, BuildComponent 0..\* — 1 Product, PCBuild 1 — 0..1 Recommendation. The diagram's "User Service Domain" label refers to the Account Service.*
 
-> The diagrams show User 1 — 1 Address; the relationship used in the specs is User 1 — 0..\* Address (a user can have several saved delivery addresses, A1). The diagrams also predate these additions, which are defined only in the tables below: `Review` (1.4), `StockNotificationSubscription` (2.3), `Order.deliveryAddressId` and `Order.paymentStatus` (3.1), `User.id`, `User.passwordHash` and `User.role` (4.1), `Address.id` (4.4), `BuildComponent.id` (5.3), and `Product.categoryId` and `Product.specifications` (1.1), which record the Product — Category and Product — Specification associations as fields.
+> The diagrams show User 1 — 1 Address; the relationship used in the specs is User 1 — 0..\* Address (a user can have several saved delivery addresses, A1). The diagrams also predate these additions, which are defined only in the tables below: `Review` (1.4), `StockNotificationSubscription` (2.3), `StockAlert` (2.4), `Order.deliveryAddressId` and `Order.paymentStatus` (3.1), `User.id`, `User.passwordHash` and `User.role` (4.1), `Address.id` (4.4), `BuildComponent.id` (5.3), and `Product.categoryId` and `Product.specifications` (1.1), which record the Product — Category and Product — Specification associations as fields.
 
 ## Domain Classes and Link to Requirements
 
 | Service | Related Requirements | Domain Classes |
 |---|---|---|
 | Catalog Service | FR-01, FR-02, FR-03, FR-04, FR-05 | Product, Category, Specification, Review |
-| Inventory Service | FR-02, FR-06, FR-07, FR-08, FR-11 | InventoryItem, StockReservation, StockNotificationSubscription |
+| Inventory Service | FR-02, FR-06, FR-07, FR-08, FR-11 | InventoryItem, StockReservation, StockNotificationSubscription, StockAlert |
 | Order Service | FR-06, FR-09, FR-10, FR-11, FR-12, FR-13, FR-14, FR-20 | Order, OrderItem |
 | Account Service | FR-10, FR-13, FR-15, FR-16, FR-17 | User, UserProfile, Preference, Address |
 | Recommendation Service | FR-17, FR-18, FR-19, FR-20, FR-21 | BuildRequest, PCBuild, BuildComponent, Recommendation |
@@ -27,6 +27,7 @@
 | InventoryItem | Stock record for a product; maintains quantity and availability | Aggregate Root / Entity |
 | StockReservation | Temporary stock allocation created during checkout | Entity |
 | StockNotificationSubscription | Customer registration to receive stock notifications for a product (CRUD, not part of the event-sourced InventoryItem) | Aggregate Root / Entity |
+| StockAlert | Stock notification stored for a subscribed customer when the product's stock becomes low or is restocked (created from `StockChanged`, not event-sourced; [Architecture Decision 17](architecture.md#architecture-decisions)) | Entity |
 | Order | Customer purchase; manages the order lifecycle and fulfilment status. A DRAFT order acts as the customer's cart | Aggregate Root / Entity |
 | OrderItem | Individual product and quantity included in an order | Entity |
 | User | Registered customer account and authentication information | Aggregate Root / Entity |
@@ -119,6 +120,19 @@ Every event also carries `occurredAt` (DateTime). `ProductCreated`, `ProductUpda
 | productId | String | Identifier of the product to receive notifications for | Required |
 | userId | String | Identifier of the user to notify | Required |
 | createdAt | DateTime | Date and Time of the subscription | Required |
+
+### 2.4 StockAlert
+
+| Field Name | Type | Description | Constraints |
+|---|---|---|---|
+| id | String | Unique identifier of each alert | Primary Identifier |
+| userId | String | Identifier of the subscribed user the alert is for | Required |
+| productId | String | Identifier of the product whose stock changed | Required |
+| type | String | `STOCK_LOW` (available stock fell below the threshold) or `PRODUCT_RESTOCKED` (stock is available again) | Required |
+| availableQuantity | Integer | Available stock (`quantity − reservedQuantity`) when the change was published | Required |
+| message | String | Text generated from `type`, `productId` and `availableQuantity` | Required |
+| occurredAt | DateTime | Date and Time of the stock change (`occurredAt` of `StockChanged`) | Required |
+| sourceEventId | String | `eventId` of the `StockChanged` that created the alert | Required; unique together with `userId` |
 
 ![Inventory service domain model](images/domain-model-inventory.png)
 

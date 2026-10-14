@@ -1,7 +1,10 @@
 package com.csci318.inventoryservice;
 
+import com.csci318.inventoryservice.domain.StockAlertType;
 import com.csci318.inventoryservice.infrastructure.InventoryReadModelRepository;
+import com.csci318.inventoryservice.infrastructure.StockAlertRepository;
 import com.csci318.inventoryservice.service.InventoryCommandService;
+import com.csci318.inventoryservice.service.SubscribeStockNotificationCommand;
 import com.csci318.inventoryservice.service.UpdateStockLevelCommand;
 import com.jayway.jsonpath.JsonPath;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -29,7 +32,8 @@ import static org.awaitility.Awaitility.await;
 
 /**
  * The order flow through a real (embedded) Kafka broker: Inventory Service consumes order-events
- * and publishes inventory-reservation-events and inventory-stock-events.
+ * and publishes inventory-reservation-events and inventory-stock-events. It also consumes its own
+ * inventory-stock-events to create stock alerts (I2).
  */
 @SpringBootTest(properties = {
         "messaging.kafka.enabled=true",
@@ -53,6 +57,9 @@ class InventoryKafkaIntegrationTests {
 
     @Autowired
     private InventoryReadModelRepository readModels;
+
+    @Autowired
+    private StockAlertRepository alerts;
 
     private Consumer<String, String> reservationEvents;
     private Consumer<String, String> stockEvents;
@@ -132,6 +139,45 @@ class InventoryKafkaIntegrationTests {
             assertThat(readModels.findById(productId).orElseThrow().getQuantity()).isEqualTo(3);
             assertThat(readModels.findById(productId).orElseThrow().getReservedQuantity()).isZero();
         });
+    }
+
+    @Test
+    void aRestockGoesThroughKafkaToTheSubscribersStockAlert() {
+        String userId = "user-" + UUID.randomUUID();
+        commandService.handle(new UpdateStockLevelCommand(productId, 0, null));
+        commandService.handle(new SubscribeStockNotificationCommand(productId, userId));
+
+        // available stock 0 -> 5: ProductRestocked -> StockChanged (PRODUCT_RESTOCKED) -> StockAlert
+        commandService.handle(new UpdateStockLevelCommand(productId, 5, null));
+
+        await().atMost(TIMEOUT).untilAsserted(() ->
+                assertThat(alerts.findByUserIdOrderByOccurredAtDesc(userId)).singleElement().satisfies(alert -> {
+                    assertThat(alert.getProductId()).isEqualTo(productId);
+                    assertThat(alert.getType()).isEqualTo(StockAlertType.PRODUCT_RESTOCKED);
+                    assertThat(alert.getAvailableQuantity()).isEqualTo(5);
+                    assertThat(alert.getSourceEventId()).isNotBlank();
+                }));
+    }
+
+    @Test
+    void aRepeatedStockChangedCreatesOneAlert() {
+        String userId = "user-" + UUID.randomUUID();
+        commandService.handle(new UpdateStockLevelCommand(productId, 0, null));
+        commandService.handle(new SubscribeStockNotificationCommand(productId, userId));
+        String eventId = UUID.randomUUID().toString();
+        String message = "{\"eventId\": \"" + eventId + "\", \"eventType\": \"StockChanged\", \"version\": 1, "
+                + "\"occurredAt\": \"2026-10-14T03:15:00Z\", \"productId\": \"" + productId + "\", "
+                + "\"quantity\": 4, \"reservedQuantity\": 0, \"change\": \"STOCK_LOW\"}";
+
+        kafkaTemplate.send("inventory-stock-events", productId, message);
+        kafkaTemplate.send("inventory-stock-events", productId, message);
+        String marker = UUID.randomUUID().toString();
+        kafkaTemplate.send("inventory-stock-events", productId, message.replace(eventId, marker));
+
+        // the third message is consumed after the first two (same key, same partition)
+        await().atMost(TIMEOUT).until(() -> alerts.existsBySourceEventIdAndUserId(marker, userId));
+        assertThat(alerts.existsBySourceEventIdAndUserId(eventId, userId)).isTrue();
+        assertThat(alerts.findByUserIdOrderByOccurredAtDesc(userId)).hasSize(2);
     }
 
     private void send(String orderId, String eventType, String extraFields) {
