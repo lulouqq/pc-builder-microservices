@@ -1,21 +1,22 @@
 package com.csci318.orderservice;
 
-import com.csci318.orderservice.domain.event.OrderCancelled;
-import com.csci318.orderservice.domain.event.OrderCompleted;
-import com.csci318.orderservice.domain.event.OrderPlaced;
-import com.csci318.orderservice.domain.event.PaymentStatusUpdated;
-import com.csci318.orderservice.service.AccountClient;
-import com.csci318.orderservice.service.AuthenticationRequiredException;
-import com.csci318.orderservice.service.CatalogClient;
-import com.csci318.orderservice.service.CatalogProduct;
-import com.csci318.orderservice.service.OrderService;
-import com.csci318.orderservice.service.RecommendationClient;
-import com.csci318.orderservice.service.RecommendedBuild;
-import com.csci318.orderservice.service.ResourceNotFoundException;
-import com.csci318.orderservice.service.ServiceUnavailableException;
-import com.jayway.jsonpath.JsonPath;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.contains;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -30,28 +31,28 @@ import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.contains;
-import static org.hamcrest.Matchers.containsInAnyOrder;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.BDDMockito.given;
-import static org.mockito.BDDMockito.willThrow;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.csci318.orderservice.domain.event.OrderCancelled;
+import com.csci318.orderservice.domain.event.OrderCompleted;
+import com.csci318.orderservice.domain.event.OrderPlaced;
+import com.csci318.orderservice.domain.event.PaymentStatusUpdated;
+import com.csci318.orderservice.infrastructure.OrderRepository;
+import com.csci318.orderservice.service.AccountClient;
+import com.csci318.orderservice.service.AuthenticationRequiredException;
+import com.csci318.orderservice.service.CatalogClient;
+import com.csci318.orderservice.service.CatalogProduct;
+import com.csci318.orderservice.service.OrderService;
+import com.csci318.orderservice.service.RecommendationClient;
+import com.csci318.orderservice.service.RecommendedBuild;
+import com.csci318.orderservice.service.ResourceNotFoundException;
+import com.csci318.orderservice.service.ServiceUnavailableException;
+import com.jayway.jsonpath.JsonPath;
 
 /**
  * The Order REST API (O1, O2, O4, O5, O6, R3) and the order lifecycle. Catalog, Account and
@@ -69,6 +70,9 @@ class OrderApiTests {
 
     @Autowired
     private OrderService orderService;
+
+    @Autowired
+    private OrderRepository orderRepository;
 
     @Autowired
     private ApplicationEvents events;
@@ -91,6 +95,8 @@ class OrderApiTests {
 
     @BeforeEach
     void setUp() {
+        orderRepository.deleteAll();
+        
         userId = "user-" + UUID.randomUUID();
         token = TestTokens.bearer(jwtSecret, userId, "CUSTOMER");
         otherUserToken = TestTokens.bearer(jwtSecret, "someone-else", "CUSTOMER");
