@@ -89,7 +89,7 @@ class InventoryApiTests {
     void firstStockUpdateCreatesTheInventoryRecord() throws Exception {
         mockMvc.perform(get("/inventory/{id}", productId))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error").value("ResourceNotFound"))
+                .andExpect(jsonPath("$.code").value("ResourceNotFound"))
                 .andExpect(jsonPath("$.message").isNotEmpty());
 
         updateStock(25, "initial delivery")
@@ -140,7 +140,7 @@ class InventoryApiTests {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(body))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.error").value("ValidationFailed"));
+                    .andExpect(jsonPath("$.code").value("ValidationFailed"));
         }
         // nothing was recorded, so the product still has no inventory record
         assertThat(stream()).isEmpty();
@@ -154,7 +154,7 @@ class InventoryApiTests {
 
         updateStock(5, null)
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("ValidationFailed"));
+                .andExpect(jsonPath("$.code").value("ValidationFailed"));
 
         mockMvc.perform(get("/inventory/{id}", productId))
                 .andExpect(jsonPath("$.quantity").value(10))
@@ -202,7 +202,7 @@ class InventoryApiTests {
 
         reserve("order-2", 2)
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error").value("StockUnavailable"));
+                .andExpect(jsonPath("$.code").value("StockUnavailable"));
 
         mockMvc.perform(get("/inventory/{id}", productId))
                 .andExpect(jsonPath("$.reservedQuantity").value(4));
@@ -219,7 +219,7 @@ class InventoryApiTests {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(body))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.error").value("ValidationFailed"));
+                    .andExpect(jsonPath("$.code").value("ValidationFailed"));
         }
     }
 
@@ -232,7 +232,7 @@ class InventoryApiTests {
         mockMvc.perform(delete("/inventory/{id}/reservations/{reservationId}", productId, "unknown")
                         .header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error").value("ReservationConflict"));
+                .andExpect(jsonPath("$.code").value("ReservationConflict"));
 
         mockMvc.perform(delete("/inventory/{id}/reservations/{reservationId}", productId, reservationId)
                         .header(HttpHeaders.AUTHORIZATION, admin))
@@ -240,14 +240,14 @@ class InventoryApiTests {
         mockMvc.perform(delete("/inventory/{id}/reservations/{reservationId}", productId, reservationId)
                         .header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.error").value("ReservationConflict"));
+                .andExpect(jsonPath("$.code").value("ReservationConflict"));
     }
 
     @Test
     void reservationEndpointsReturnNotFoundWithoutInventoryRecord() throws Exception {
         reserve("order-1", 1)
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error").value("ResourceNotFound"));
+                .andExpect(jsonPath("$.code").value("ResourceNotFound"));
         mockMvc.perform(delete("/inventory/{id}/reservations/{reservationId}", productId, "r1")
                         .header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isNotFound());
@@ -348,14 +348,14 @@ class InventoryApiTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"userId\": \"user-1\"}"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("AuthenticationRequired"));
+                .andExpect(jsonPath("$.code").value("AuthenticationRequired"));
         // another user's id, and an admin acting for a customer
         subscribe(customer, "user-2")
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.error").value("AccessDenied"));
+                .andExpect(jsonPath("$.code").value("AccessDenied"));
         subscribe(admin, "user-1")
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.error").value("AccessDenied"));
+                .andExpect(jsonPath("$.code").value("AccessDenied"));
 
         assertThat(subscriptions.findByProductIdAndUserId(productId, "user-1")).isEmpty();
         assertThat(subscriptions.findByProductIdAndUserId(productId, "user-2")).isEmpty();
@@ -368,11 +368,11 @@ class InventoryApiTests {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("ValidationFailed"));
+                .andExpect(jsonPath("$.code").value("ValidationFailed"));
         // no inventory record for the product
         subscribe(customer, "user-1")
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.error").value("ResourceNotFound"));
+                .andExpect(jsonPath("$.code").value("ResourceNotFound"));
     }
 
     // --- access control ---
@@ -385,21 +385,21 @@ class InventoryApiTests {
         mockMvc.perform(put("/inventory/{id}", productId)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"quantity\": 5}"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.error").value("AuthenticationRequired"))
+                .andExpect(jsonPath("$.code").value("AuthenticationRequired"))
                 .andExpect(jsonPath("$.message").isNotEmpty());
         for (String badToken : List.of(expired, foreign, "Bearer not-a-token")) {
             mockMvc.perform(put("/inventory/{id}", productId)
                             .header(HttpHeaders.AUTHORIZATION, badToken)
                             .contentType(MediaType.APPLICATION_JSON).content("{\"quantity\": 5}"))
                     .andExpect(status().isUnauthorized())
-                    .andExpect(jsonPath("$.error").value("AuthenticationRequired"));
+                    .andExpect(jsonPath("$.code").value("AuthenticationRequired"));
         }
 
         mockMvc.perform(put("/inventory/{id}", productId)
                         .header(HttpHeaders.AUTHORIZATION, customer)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"quantity\": 5}"))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.error").value("AccessDenied"));
+                .andExpect(jsonPath("$.code").value("AccessDenied"));
         mockMvc.perform(post("/inventory/{id}/reservations", productId)
                         .header(HttpHeaders.AUTHORIZATION, customer)
                         .contentType(MediaType.APPLICATION_JSON)

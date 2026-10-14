@@ -18,6 +18,7 @@
         <module>account-service</module>
         <module>recommendation-service</module>
         <module>inventory-service</module>
+        <module>order-service</module>
     </modules>
 
     <parent>

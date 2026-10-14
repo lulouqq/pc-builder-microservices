@@ -19,6 +19,14 @@ spring:
     hibernate:
       ddl-auto: update
     show-sql: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      auto-offset-reset: earliest
+    producer:
+      properties:
+        # do not block a request for long when the broker is down
+        max.block.ms: 5000
 
 # JWT validation (specs/api-endpoints.md "Authentication and Authorisation").
 # JWT_SECRET has no default: it must be set before starting the service, with the same value
@@ -30,3 +38,9 @@ security:
 # StockLow is raised when available stock (quantity - reservedQuantity) falls below this value.
 inventory:
   low-stock-threshold: ${LOW_STOCK_THRESHOLD:10}
+
+# Kafka messaging (Architecture Decision 14). Set KAFKA_ENABLED=false to run without a broker:
+# events are then only raised inside the service.
+messaging:
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}

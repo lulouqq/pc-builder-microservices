@@ -1,0 +1,9 @@
+# Local Apache Kafka broker for development (Architecture Decision 14).
+# Start: docker compose up -d      Stop: docker compose down
+# The image's default configuration runs a single KRaft node that listens on localhost:9092.
+services:
+  kafka:
+    image: apache/kafka:3.7.1
+    container_name: pc-builder-kafka
+    ports:
+      - "9092:9092"

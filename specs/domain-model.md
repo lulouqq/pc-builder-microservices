@@ -135,6 +135,7 @@ Every event also carries `occurredAt` (DateTime). `ProductCreated`, `ProductUpda
 | createdAt | DateTime | Date and Time of the order | Required |
 | deliveryAddressId | String | Identifier of the saved Address (Account Service) selected for delivery (O2) | Optional |
 | paymentStatus | String | Status of the payment (PENDING/PAID/FAILED) (O4) | Required |
+| paymentDueAt | DateTime | Time by which payment must be recorded; set when the order becomes PROCESSING (10 minutes later). An unpaid order is cancelled after it (FR-06) | Optional |
 
 ### 3.2 OrderItem
 
@@ -179,6 +180,10 @@ DRAFT -> PLACED -> PROCESSING -> COMPLETED
 - When Inventory Service consumes `OrderCancelled`, it releases any stock reservation held for that order (`StockReservationReleased`).
 - When Inventory Service consumes `OrderCompleted`, it confirms the stock reservation for that order (`StockReservationConfirmed`).
 - A COMPLETED order cannot be cancelled.
+- A customer can have only one DRAFT order at a time.
+- Adding a product that is already in a DRAFT order increases the quantity of its OrderItem. `unitPrice` is the product's price in Catalog Service when the item was last added.
+- Checkout requires at least one OrderItem and a `deliveryAddressId`.
+- The payment time limit is 10 minutes from the moment the order becomes PROCESSING (`paymentDueAt`). A scheduled check in Order Service cancels overdue orders.
 
 Operations that are not valid for the current status are rejected with `OrderStateViolation` (409 Conflict).
 
