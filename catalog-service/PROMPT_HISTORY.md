@@ -175,3 +175,42 @@ Before modifying files, report the decisions that require team confirmation and 
 - `catalog-service/src/main/resources/application.yml`
 - `catalog-service/src/test/java/com/csci318/catalogservice/{ProductDetailsTests,RestInventoryClientTests,TrendingProductsCalculatorTests}.java`
 - `catalog-service/README.md`, `catalog-service/PROMPT_HISTORY.md`
+
+---
+
+## Prompt 5
+
+**Date:** 2026-10-14
+
+**Goal:** Fix the confirmed Catalog blockers from the project audit: JWT authentication and authorisation for C4 and C5, and the error response field `error` → `code`. C3 is not part of this change.
+
+**Exact user prompt:**
+
+````text
+Fix only the confirmed Catalog blockers from the audit: JWT security/authorization for C4 and C5, and change the error response field from error to code. Follow the existing security implementation in Inventory/Order, preserve current endpoint contracts, update tests, and do not implement C3 yet.
+````
+
+**Summary of changes:**
+
+- Added `spring-boot-starter-security` and `spring-boot-starter-oauth2-resource-server`, and `security.jwt.secret: ${JWT_SECRET}` (no default) in `application.yml`.
+- New `SecurityConfig`, `JwtConfig` and `SecurityErrorHandler`, following inventory-service: stateless HS256 resource server with the shared secret, `role` claim mapped to `ROLE_*`, 401/403 written as `{code, message}`.
+- Access rules (specs/api-endpoints.md): every `GET` on `/products/**` and `/categories/**` and the H2 console are public; `POST /products/{productId}/reviews` needs a token; all other product and category endpoints (C5) need `ADMIN`.
+- `ReviewController`: owner check (token `sub` must equal the body's `userId`) before the product is looked up; `ADMIN` does not bypass it. `GlobalExceptionHandler` maps `AccessDeniedException` to 403 `AccessDenied`.
+- `ErrorResponse` field renamed from `error` to `code` (error response contract).
+- Endpoint paths, request and response bodies and success statuses are unchanged.
+- Tests: `test` profile with `application-test.yml`; `TestTokens` (copied from inventory-service); `$.error` assertions changed to `$.code`; C5 and review requests send admin / owner tokens. New tests: C5 endpoints reject missing, expired, wrongly signed, malformed and `CUSTOMER` tokens; reviews need the owner's token (401, 403 for another user and for an admin, 403 before 404); reviews can be read without a token. `./mvnw test -pl catalog-service`: 49 tests, all pass.
+- `catalog-service/README.md`: status table and a new "Authentication and authorisation" section. Root `README.md`: catalog status and `JWT_SECRET` in the run commands.
+- Not changed: C3 (trending), `ProductViewed` publishing, and the out-of-date "provisional Inventory contract" text in the README and comments.
+
+**Files created/modified:**
+
+- `catalog-service/pom.xml`
+- `catalog-service/src/main/resources/application.yml`
+- `catalog-service/src/main/java/com/csci318/catalogservice/infrastructure/{SecurityConfig,JwtConfig}.java` (new)
+- `catalog-service/src/main/java/com/csci318/catalogservice/presentation/SecurityErrorHandler.java` (new)
+- `catalog-service/src/main/java/com/csci318/catalogservice/presentation/{GlobalExceptionHandler,ReviewController}.java`
+- `catalog-service/src/main/java/com/csci318/catalogservice/presentation/dto/ErrorResponse.java`
+- `catalog-service/src/test/resources/application-test.yml` (new)
+- `catalog-service/src/test/java/com/csci318/catalogservice/TestTokens.java` (new)
+- `catalog-service/src/test/java/com/csci318/catalogservice/{CatalogManagementTests,CatalogServiceApplicationTests,ProductBrowsingTests,ProductDetailsTests,ProductReviewTests}.java`
+- `catalog-service/README.md`, `README.md`, `catalog-service/PROMPT_HISTORY.md`

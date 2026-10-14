@@ -11,10 +11,26 @@ Port: 8081
 | C1 Browse and search products | Implemented |
 | C2 View product details | Implemented against a provisional Inventory contract; `ProductViewed` is not published yet |
 | C3 View trending products | Calculation logic only; no Kafka, no endpoint (waiting for team decisions) |
-| C4 Submit and view product reviews | Implemented |
-| C5 Manage products and categories | Implemented; endpoints are not protected yet |
+| C4 Submit and view product reviews | Implemented; submitting a review needs the reviewer's own token |
+| C5 Manage products and categories | Implemented; ADMIN token required |
 
-Admin authorisation for the C5 endpoints is an open architecture decision, deferred until Account Service is implemented (see `specs/architecture.md`, decision 11).
+## Authentication and authorisation
+
+Design: `specs/api-endpoints.md` "Authentication and Authorisation" and `specs/architecture.md` decision 11. The service validates the JWT issued by Account Service itself (HS256, shared secret, stateless OAuth2 resource server); it does not call Account Service.
+
+| Access | Endpoints |
+|---|---|
+| Public | `GET /products`, `GET /products/{productId}`, `GET /products/{productId}/reviews`, `GET /categories` |
+| Customer (owner) | `POST /products/{productId}/reviews`: the token's `sub` must equal the body's `userId` (403 otherwise, checked before the product is looked up; `ADMIN` does not bypass it) |
+| Admin | `POST /products`, `PUT`/`DELETE /products/{productId}`, `POST /categories`, `PUT`/`DELETE /categories/{categoryId}` |
+
+- A missing, malformed, expired or wrongly signed token on a protected endpoint returns `401 AuthenticationRequired`; a `CUSTOMER` token on an admin endpoint, or another user's id in a review, returns `403 AccessDenied`.
+- Every error body is `{"code", "message"}` (API error response contract).
+- `JWT_SECRET` (`security.jwt.secret`) has no default and must be set before starting the service, with the same value (at least 32 bytes) as in Account Service. Tests use the `test` profile (`src/test/resources/application-test.yml`).
+
+```bash
+JWT_SECRET='<same secret as Account Service>' ./mvnw spring-boot:run -pl catalog-service
+```
 
 ## C2: integration with Inventory Service
 

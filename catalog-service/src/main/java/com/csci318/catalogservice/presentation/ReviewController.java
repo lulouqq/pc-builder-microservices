@@ -5,6 +5,9 @@ import com.csci318.catalogservice.presentation.dto.ReviewResponse;
 import com.csci318.catalogservice.service.ReviewService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,7 +36,12 @@ public class ReviewController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public ReviewResponse submitReview(@PathVariable String productId,
-                                       @Valid @RequestBody ReviewCreateRequest request) {
+                                       @Valid @RequestBody ReviewCreateRequest request,
+                                       @AuthenticationPrincipal Jwt token) {
+        // owner check: customers can only review as themselves (checked before the product is looked up)
+        if (!token.getSubject().equals(request.userId())) {
+            throw new AccessDeniedException("Token does not belong to user " + request.userId());
+        }
         return ReviewResponse.from(reviewService.submitReview(productId, request.userId(), request.rating(),
                 request.comment()));
     }

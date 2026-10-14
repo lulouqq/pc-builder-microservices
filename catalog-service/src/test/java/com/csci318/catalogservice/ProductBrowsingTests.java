@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -24,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
 class ProductBrowsingTests {
 
     @Autowired
@@ -111,10 +113,10 @@ class ProductBrowsingTests {
     void rejectsSpecNameWithoutSpecValue() throws Exception {
         mockMvc.perform(get("/products").param("specName", "Socket"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("ValidationFailed"));
+                .andExpect(jsonPath("$.code").value("ValidationFailed"));
         mockMvc.perform(get("/products").param("specValue", "AM5"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error").value("ValidationFailed"));
+                .andExpect(jsonPath("$.code").value("ValidationFailed"));
     }
 
     @Test

@@ -24,3 +24,10 @@ spring:
 inventory-service:
   base-url: http://localhost:8082/api
   timeout: 2s
+
+# JWT validation (specs/api-endpoints.md "Authentication and Authorisation").
+# JWT_SECRET has no default: it must be set before starting the service, with the same value
+# (at least 32 bytes) as in Account Service.
+security:
+  jwt:
+    secret: ${JWT_SECRET}

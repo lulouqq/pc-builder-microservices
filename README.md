@@ -6,7 +6,7 @@ CSCI318 Software Engineering Practices & Principles – group project.
 
 | Service | Port | Status | Responsibilities |
 |---|---|---|---|
-| `catalog-service` | 8081 | C1, C4, C5 implemented | products, categories, specifications, prices, product reviews |
+| `catalog-service` | 8081 | C1, C2, C4, C5 implemented (with JWT authorisation); C3 pending | products, categories, specifications, prices, product reviews |
 | `inventory-service` | 8082 | I1, I3 implemented; I2 subscription only (customer notification pending) | stock, inventory items, stock reservations |
 | `order-service` | 8083 | O1 - O6 and R3 implemented | cart, checkout, orders, order items, order/payment status |
 | `account-service` | 8084 | in progress (A1 - A3 complete) | users, profiles, addresses, preferences |
@@ -48,15 +48,17 @@ From the repository root:
 
 ```bash
 ./mvnw clean test
-./mvnw spring-boot:run -pl catalog-service
+JWT_SECRET='<at least 32 bytes>' ./mvnw spring-boot:run -pl catalog-service
 ```
 
 On Windows PowerShell:
 
 ```powershell
 .\mvnw.cmd clean test
-.\mvnw.cmd spring-boot:run -pl catalog-service
+$env:JWT_SECRET='<at least 32 bytes>'; .\mvnw.cmd spring-boot:run -pl catalog-service
 ```
+
+`JWT_SECRET` must be the same in every service (see the service READMEs for other required variables).
 
 H2 console (catalog-service): http://localhost:8081/api/h2-console (JDBC URL `jdbc:h2:mem:catalogdb`, user `sa`, no password).
 

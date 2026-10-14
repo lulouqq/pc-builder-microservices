@@ -1460,3 +1460,26 @@ No code changes needed.
 - `specs/domain-model.md`
 - `specs/architecture.md`
 - `PROMPT_HISTORY.md`
+
+---
+
+## Prompt 30
+
+**Date:** 2026-10-14
+
+**Goal:** Audit all five services against `specs/`, the READMEs and the architecture decisions; list what is still missing or inconsistent. Review only — no code changes.
+
+**Exact user prompt:**
+
+````text
+Compare all implemented services against specs/, README, and architecture decisions. check every requirement C1–C5, I1–I3, O1–O6, A1–A3, R1–R4. verify REST contracts, JWT rules, Kafka flows, error responses, persistence, tests, and known TODO/gaps. then give only a prioritized list of what is still missing or inconsistent, separating blockers from nice-to-have improvements. Do not modify code.
+````
+
+**Summary of changes:**
+
+- No code or spec changes. `./mvnw clean test` passes (281 tests: catalog 46, inventory 41, order 54, account 68, recommendation 72).
+- Findings (in the reply to the user). Blockers: catalog-service has no JWT security (C5 admin, C4 owner, NFR-04); C3 is missing (no `GET /products/trending`, no `ProductViewed` Kafka publisher/consumer, and no agreed topic/window/size in the specs); catalog's error body uses `error` instead of `code`; I2 customer notification is undecided (`StockChanged` has no consumer). Nice-to-have: no optimistic locking on `Order` (Kafka/cancel/payment/timeout races), `CheckStockAvailabilityQuery` missing, non-contract error bodies for framework 404/405/415 in account and recommendation, no A1 DTO table in the specs, no demo seed data, stale READMEs and "PROVISIONAL" comments, no cross-service contract test.
+
+**Files created/modified:**
+
+- `PROMPT_HISTORY.md`
