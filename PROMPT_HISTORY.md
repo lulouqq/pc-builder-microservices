@@ -1581,3 +1581,68 @@ whether any known gaps remain.
 - `inventory-service/src/main/java/com/csci318/inventoryservice/presentation/{StockAlertController,dto/StockAlertResponse}.java`
 - `inventory-service/src/test/java/com/csci318/inventoryservice/{StockAlertTests,StockChangedKafkaListenerTests,StockAlertApiTests,InventoryKafkaIntegrationTests}.java`
 - `inventory-service/README.md`, `README.md`, `PROMPT_HISTORY.md`, `inventory-service/PROMPT_HISTORY.md`
+
+---
+
+## Prompt 33
+
+**Date:** 2026-10-14
+
+**Goal:** Final audit before submission: compare the code, specs, READMEs and architecture decisions; no changes.
+
+**Exact user prompt:**
+
+````text
+Now run the final and last audit of the project before submission. Compare the current code, specs, README files, and architecture decisions.
+Don't change anything.
+Give only:
+Are there any real blockers left?
+Which gaps can be left as known limitations?
+Which docs still need to be fixed?
+What should be shown in the demo?
+Can the project be considered submission-ready?
+Don't suggest extra refactoring or nice-to-have improvements if they are not required by the project requirements.
+````
+
+**Summary:**
+
+- Analysis only; no files changed (this entry was added with Prompt 34, because the prompt asked for no changes).
+- Every endpoint in `specs/api-endpoints.md` is implemented; all stories C1–C5, I1–I3, O1–O6, A1–A3, R1–R4 are implemented; last full `./mvnw clean test`: 319 tests passing. No real blockers.
+- Known limitations: I2 polling only (no push, unsubscribe, read/unread, pagination, retention); framework error bodies for unknown path / 405 / 415 in account and recommendation; no optimistic locking on Order and a 500 on simultaneous inventory REST writes; no outbox or dead-letter topic; `CheckStockAvailabilityQuery` not implemented; C3 view rows not pruned and one Catalog instance; R1 needs an LLM key and uses no tool-calling (decision 12); in-memory H2 without seed data; the cross-service order flow needs Kafka.
+- Doc gaps found: root README account status and technology stack; recommendation README (outdated R3 note and Inventory assumption); missing A1 DTOs in `specs/api-endpoints.md`.
+- Demo plan proposed (setup with Kafka, shared `JWT_SECRET`, `ADMIN_PASSWORD`, LLM key, `PAYMENT_TIME_LIMIT=1m`; flow through A, C, I, O and R stories, event store / read model and the test run). Verdict: submission-ready after the doc fixes.
+
+**Files created/modified:**
+
+- None
+
+---
+
+## Prompt 34
+
+**Date:** 2026-10-14
+
+**Goal:** Fix only the doc gaps found in the final audit (Prompt 33); no code changes.
+
+**Exact user prompt:**
+
+````text
+Fix only the necessary doc gaps found in the final audit:
+Update the root README.md: change Account status to A1–A3 implemented, and add Spring Security/JWT and LangChain4j to the technology stack.
+Update recommendation-service/README.md: remove the outdated phrase saying that the Order side of R3 is not implemented, and remove the outdated provisional Inventory assumption.
+Add the A1 DTO contracts to specs/api-endpoints.md: UserRegistrationRequest, UserResponse, ProfileUpdateRequest, AddressCreateRequest, AddressUpdateRequest, and AddressResponse.
+Add this final audit and this doc-fix prompt to the root PROMPT_HISTORY.md.
+Don’t change any code or make any other improvements.
+After that, run the full ./mvnw clean test and provide a short report.
+````
+
+**Summary of changes:**
+
+- Root `README.md`: account-service status "A1 - A3 implemented"; technology stack lists Spring Security with JWT and LangChain4j.
+- `recommendation-service/README.md`: R3 status is "Implemented" (outdated Order Service note removed); the Inventory-response assumption removed from "Assumptions to confirm" and the remaining items renumbered.
+- `specs/api-endpoints.md`: new "Account Service DTOs (A1)" table (`UserRegistrationRequest`, `UserResponse`, `ProfileUpdateRequest`, `AddressCreateRequest`, `AddressUpdateRequest`, `AddressResponse`), with the fields taken from the existing account-service DTOs and a note on required fields and errors as implemented.
+- `./mvnw clean test`: see the report of this prompt.
+
+**Files created/modified:**
+
+- `README.md`, `recommendation-service/README.md`, `specs/api-endpoints.md`, `PROMPT_HISTORY.md`

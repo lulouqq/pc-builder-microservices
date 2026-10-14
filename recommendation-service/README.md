@@ -10,7 +10,7 @@ Port: 8085, base path `/api`.
 |---|---|---|---|
 | R1 Generate recommended PC build | `POST /recommendations` | Customer (owner = body `userId`) | Implemented |
 | R2 Validate component compatibility | `POST /compatibility/validate` | Public | Implemented |
-| R3 View a recommended build | `GET /recommendations/{recommendationId}` | Customer (owner = stored `userId`) | Implemented (Order Service side of R3 not implemented yet) |
+| R3 View a recommended build | `GET /recommendations/{recommendationId}` | Customer (owner = stored `userId`) | Implemented |
 | R4 View previous recommendations | `GET /users/{userId}/recommendations` | Customer (owner = `{userId}`) | Implemented |
 
 Contracts: `specs/api-endpoints.md` ("Recommendation Service DTOs"), rules: `specs/domain-model.md` 5.5, flow: `specs/architecture.md` decision 12.
@@ -65,10 +65,9 @@ CPU ↔ Motherboard `Socket`, RAM ↔ Motherboard `Memory Type`, Motherboard ↔
 
 ## Assumptions to confirm
 
-1. **Inventory response without stock fields:** the contract is `InventoryResponse {productId, quantity, reservedQuantity}` (specs/api-endpoints.md), available = `quantity − reservedQuantity`; a response without `quantity`/`reservedQuantity` is treated as 503.
-2. **Category names** are matched to the canonical types ignoring surrounding whitespace and case. If a product has the same specification name twice, the first value is used.
-3. **Domain event payloads** (not defined in the specs): `BuildRequested(buildRequestId, userId, budget, purpose, occurredAt)`, `RecommendationGenerated(recommendationId, buildId, buildRequestId, userId, totalPrice, occurredAt)`, `CompatibilityChecked(productIds, compatible, conflictCount, occurredAt)`. `BuildRequested` is published after the request is stored, i.e. only for successful R1 calls.
-4. **LLM provider:** LangChain4j `langchain4j-open-ai` 1.4.0 (OpenAI-compatible API, provider chosen by `LLM_BASE_URL`). Technical failures are not retried (`maxRetries(0)`). This module sets Jackson to 2.19.2, the version LangChain4j 1.4.0 is built with.
+1. **Category names** are matched to the canonical types ignoring surrounding whitespace and case. If a product has the same specification name twice, the first value is used.
+2. **Domain event payloads** (not defined in the specs): `BuildRequested(buildRequestId, userId, budget, purpose, occurredAt)`, `RecommendationGenerated(recommendationId, buildId, buildRequestId, userId, totalPrice, occurredAt)`, `CompatibilityChecked(productIds, compatible, conflictCount, occurredAt)`. `BuildRequested` is published after the request is stored, i.e. only for successful R1 calls.
+3. **LLM provider:** LangChain4j `langchain4j-open-ai` 1.4.0 (OpenAI-compatible API, provider chosen by `LLM_BASE_URL`). Technical failures are not retried (`maxRetries(0)`). This module sets Jackson to 2.19.2, the version LangChain4j 1.4.0 is built with.
 
 ## Tests
 

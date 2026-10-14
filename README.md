@@ -9,7 +9,7 @@ CSCI318 Software Engineering Practices & Principles – group project.
 | `catalog-service` | 8081 | C1 - C5 implemented | products, categories, specifications, prices, product reviews |
 | `inventory-service` | 8082 | I1 - I3 implemented | stock, inventory items, stock reservations, stock alerts |
 | `order-service` | 8083 | O1 - O6 and R3 implemented | cart, checkout, orders, order items, order/payment status |
-| `account-service` | 8084 | in progress (A1 - A3 complete) | users, profiles, addresses, preferences |
+| `account-service` | 8084 | A1 - A3 implemented | users, profiles, addresses, preferences |
 | `recommendation-service` | 8085 | R1 - R4 implemented | AI-generated PC builds, compatibility checking, previous build requests |
 
 Each service uses the base path `/api` (see [specs/api-endpoints.md](specs/api-endpoints.md)).
@@ -39,8 +39,10 @@ Each microservice is structured into four layers (package `com.csci318.<service>
 
 - Java 21, Apache Maven (multi-module POM)
 - Spring Boot 3.3 (Spring Web, Spring Data JPA)
+- Spring Security with JWT (stateless OAuth2 resource server, HS256 tokens issued by account-service)
 - H2 in-memory database for development
 - Apache Kafka with Spring for Apache Kafka (order-service, inventory-service, catalog-service)
+- LangChain4j for the AI recommendation agent (recommendation-service)
 
 ## Running
 

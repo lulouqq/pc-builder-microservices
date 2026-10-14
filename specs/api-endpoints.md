@@ -155,6 +155,21 @@ Field names and types follow the [Order Service Domain Model](domain-model.md#3-
 | A3 | GET | /users/{userId}/preferences | None | 200 OK (PreferenceResponse) | Retrieve saved recommendation preferences |
 | A3 | PUT | /users/{userId}/preferences | PreferenceUpdateRequest | 200 OK (PreferenceResponse) | Save or update recommendation preferences |
 
+#### Account Service DTOs (A1)
+
+Field names and types follow [User](domain-model.md#41-user), [UserProfile](domain-model.md#42-userprofile) and [Address](domain-model.md#44-address).
+
+| DTO | Fields |
+|---|---|
+| UserRegistrationRequest | username, email, phone, password, firstName (optional), lastName (optional) |
+| UserResponse | id, username, email, phone, firstName, lastName |
+| ProfileUpdateRequest | firstName (optional), lastName (optional) |
+| AddressCreateRequest | streetNo (Integer), streetName, suburb, city, state, postCode (Integer) |
+| AddressUpdateRequest | streetNo (Integer), streetName, suburb, city, state, postCode (Integer) |
+| AddressResponse | id, streetNo, streetName, suburb, city, state, postCode |
+
+> `POST /users` returns `ValidationFailed` (400) when `username`, `email`, `phone` or `password` is missing or blank, or the username is already taken; it always creates a `CUSTOMER`. `UserResponse` never contains the password or its hash, and not the role or the preference. `PUT /users/{userId}/profile` replaces the whole profile: a missing `firstName` or `lastName` is cleared. All address fields are required; `PUT /users/{userId}/addresses/{addressId}` replaces the whole address. An address id that does not exist or belongs to another user returns `ResourceNotFound` (404). `AddressResponse.id` is the `deliveryAddressId` used by Order Service (O2).
+
 #### Account Service DTOs (A2)
 
 | DTO | Fields |
